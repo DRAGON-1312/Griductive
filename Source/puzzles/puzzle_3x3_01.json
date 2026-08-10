@@ -1,0 +1,138 @@
+{
+  "name": "3x3 Basic Sanity",
+  "size": 3,
+
+  "characters": [
+    {
+      "id": "A1",
+      "name": "Alice",
+      "profession": "Doctor",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_A1",
+        "type": "SAME",
+        "params": {
+          "people": ["A1", "B1"]
+        }
+      }
+    },
+
+    {
+      "id": "B1",
+      "name": "Ben",
+      "profession": "Teacher",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_B1",
+        "type": "DIFFERENT",
+        "params": {
+          "people": ["B1", "C1"]
+        }
+      }
+    },
+
+    {
+      "id": "C1",
+      "name": "Cara",
+      "profession": "Painter",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_C1",
+        "type": "SAME",
+        "params": {
+          "people": ["C1", "A2"]
+        }
+      }
+    },
+
+    {
+      "id": "A2",
+      "name": "Daniel",
+      "profession": "Engineer",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_A2",
+        "type": "SAME",
+        "params": {
+          "people": ["A2", "B3"]
+        }
+      }
+    },
+
+    {
+      "id": "B2",
+      "name": "Emma",
+      "profession": "Scientist",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_B2",
+        "type": "FACT",
+        "params": {
+          "person": "A1",
+          "status": "CRIMINAL"
+        }
+      }
+    },
+
+    {
+      "id": "C2",
+      "name": "Finn",
+      "profession": "Chef",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_C2",
+        "type": "DIFFERENT",
+        "params": {
+          "people": ["C2", "A3"]
+        }
+      }
+    },
+
+    {
+      "id": "A3",
+      "name": "Grace",
+      "profession": "Nurse",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_A3",
+        "type": "FACT",
+        "params": {
+          "person": "B2",
+          "status": "CRIMINAL"
+        }
+      }
+    },
+
+    {
+      "id": "B3",
+      "name": "Henry",
+      "profession": "Writer",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_B3",
+        "type": "DIFFERENT",
+        "params": {
+          "people": ["B3", "C3"]
+        }
+      }
+    },
+
+    {
+      "id": "C3",
+      "name": "Iris",
+      "profession": "Farmer",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_C3",
+        "type": "SAME",
+        "params": {
+          "people": ["C3", "C2"]
+        }
+      }
+    }
+  ],
+
+  "initial_revealed": [
+    "B2"
+  ]
+}
