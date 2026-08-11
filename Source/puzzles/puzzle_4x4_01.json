@@ -1,0 +1,271 @@
+{
+  "name": "4x4 Full Core Integration",
+  "size": 4,
+  "characters": [
+    {
+      "id": "A1",
+      "name": "Alice",
+      "profession": "Doctor",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_A1",
+        "type": "SAME",
+        "params": {
+          "people": [
+            "A1",
+            "C1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "B1",
+      "name": "Ben",
+      "profession": "Teacher",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_B1",
+        "type": "AT_MOST",
+        "params": {
+          "k": 2,
+          "region": {
+            "type": "ROW",
+            "value": 1
+          }
+        }
+      }
+    },
+    {
+      "id": "C1",
+      "name": "Cara",
+      "profession": "Painter",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_C1",
+        "type": "DIFFERENT",
+        "params": {
+          "people": [
+            "C1",
+            "B1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "D1",
+      "name": "Dylan",
+      "profession": "Engineer",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_D1",
+        "type": "SAME",
+        "params": {
+          "people": [
+            "D1",
+            "C3"
+          ]
+        }
+      }
+    },
+    {
+      "id": "A2",
+      "name": "Emma",
+      "profession": "Scientist",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_A2",
+        "type": "FACT",
+        "params": {
+          "person": "A1",
+          "status": "CRIMINAL"
+        }
+      }
+    },
+    {
+      "id": "B2",
+      "name": "Finn",
+      "profession": "Chef",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_B2",
+        "type": "EXACTLY",
+        "params": {
+          "k": 1,
+          "region": {
+            "type": "ROW",
+            "value": 2
+          }
+        }
+      }
+    },
+    {
+      "id": "C2",
+      "name": "Grace",
+      "profession": "Nurse",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_C2",
+        "type": "EXACTLY",
+        "params": {
+          "k": 4,
+          "region": {
+            "type": "NEIGHBORS",
+            "value": "B2"
+          }
+        }
+      }
+    },
+    {
+      "id": "D2",
+      "name": "Henry",
+      "profession": "Writer",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_D2",
+        "type": "FACT",
+        "params": {
+          "person": "B4",
+          "status": "CRIMINAL"
+        }
+      }
+    },
+    {
+      "id": "A3",
+      "name": "Iris",
+      "profession": "Farmer",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_A3",
+        "type": "DIFFERENT",
+        "params": {
+          "people": [
+            "A3",
+            "A4"
+          ]
+        }
+      }
+    },
+    {
+      "id": "B3",
+      "name": "Jack",
+      "profession": "Architect",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_B3",
+        "type": "EXACTLY",
+        "params": {
+          "k": 2,
+          "region": {
+            "type": "ROW",
+            "value": 3
+          }
+        }
+      }
+    },
+    {
+      "id": "C3",
+      "name": "Kara",
+      "profession": "Lawyer",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_C3",
+        "type": "AT_LEAST",
+        "params": {
+          "k": 2,
+          "region": {
+            "type": "ROW",
+            "value": 4
+          }
+        }
+      }
+    },
+    {
+      "id": "D3",
+      "name": "Liam",
+      "profession": "Pilot",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_D3",
+        "type": "AT_MOST",
+        "params": {
+          "k": 2,
+          "region": {
+            "type": "ROW",
+            "value": 4
+          }
+        }
+      }
+    },
+    {
+      "id": "A4",
+      "name": "Mia",
+      "profession": "Dentist",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_A4",
+        "type": "DIFFERENT",
+        "params": {
+          "people": [
+            "B4",
+            "D4"
+          ]
+        }
+      }
+    },
+    {
+      "id": "B4",
+      "name": "Noah",
+      "profession": "Programmer",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_B4",
+        "type": "AT_LEAST",
+        "params": {
+          "k": 2,
+          "region": {
+            "type": "EXPLICIT",
+            "value": [
+              "B4",
+              "C4",
+              "D4"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "C4",
+      "name": "Olivia",
+      "profession": "Pharmacist",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_C4",
+        "type": "AT_MOST",
+        "params": {
+          "k": 0,
+          "region": {
+            "type": "COLUMN",
+            "value": "D"
+          }
+        }
+      }
+    },
+    {
+      "id": "D4",
+      "name": "Paul",
+      "profession": "Journalist",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_D4",
+        "type": "FACT",
+        "params": {
+          "person": "B2",
+          "status": "CRIMINAL"
+        }
+      }
+    }
+  ],
+  "initial_revealed": [
+    "B2"
+  ]
+}
