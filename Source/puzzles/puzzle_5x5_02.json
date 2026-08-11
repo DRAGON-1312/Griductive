@@ -1,0 +1,479 @@
+{
+  "name": "5x5 Hard Scalability Stress",
+  "size": 5,
+  "characters": [
+    {
+      "id": "A1",
+      "name": "Alice",
+      "profession": "Doctor",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_A1",
+        "type": "FACT",
+        "params": {
+          "person": "A4",
+          "status": "INNOCENT"
+        }
+      }
+    },
+    {
+      "id": "B1",
+      "name": "Ben",
+      "profession": "Teacher",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_B1",
+        "type": "AT_LEAST",
+        "params": {
+          "k": 3,
+          "region": {
+            "type": "ROW",
+            "value": 1
+          }
+        }
+      }
+    },
+    {
+      "id": "C1",
+      "name": "Cara",
+      "profession": "Painter",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_C1",
+        "type": "EXACTLY",
+        "params": {
+          "k": 4,
+          "region": {
+            "type": "NEIGHBORS",
+            "value": "C2"
+          }
+        }
+      }
+    },
+    {
+      "id": "D1",
+      "name": "Dylan",
+      "profession": "Engineer",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_D1",
+        "type": "IMPLIES",
+        "params": {
+          "antecedent": {
+            "person": "D1",
+            "status": "INNOCENT"
+          },
+          "consequent": {
+            "person": "C1",
+            "status": "CRIMINAL"
+          }
+        }
+      }
+    },
+    {
+      "id": "E1",
+      "name": "Emma",
+      "profession": "Scientist",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_E1",
+        "type": "AT_MOST",
+        "params": {
+          "k": 5,
+          "region": {
+            "type": "EXPLICIT",
+            "value": [
+              "D1",
+              "E1",
+              "A2",
+              "B2",
+              "D2",
+              "A3",
+              "C3"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "A2",
+      "name": "Finn",
+      "profession": "Chef",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_A2",
+        "type": "IMPLIES",
+        "params": {
+          "antecedent": {
+            "person": "A2",
+            "status": "INNOCENT"
+          },
+          "consequent": {
+            "person": "E1",
+            "status": "CRIMINAL"
+          }
+        }
+      }
+    },
+    {
+      "id": "B2",
+      "name": "Grace",
+      "profession": "Nurse",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_B2",
+        "type": "AT_MOST",
+        "params": {
+          "k": 2,
+          "region": {
+            "type": "ROW",
+            "value": 2
+          }
+        }
+      }
+    },
+    {
+      "id": "C2",
+      "name": "Henry",
+      "profession": "Writer",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_C2",
+        "type": "EXACTLY",
+        "params": {
+          "k": 4,
+          "region": {
+            "type": "NEIGHBORS",
+            "value": "C3"
+          }
+        }
+      }
+    },
+    {
+      "id": "D2",
+      "name": "Iris",
+      "profession": "Farmer",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_D2",
+        "type": "IMPLIES",
+        "params": {
+          "antecedent": {
+            "person": "D2",
+            "status": "CRIMINAL"
+          },
+          "consequent": {
+            "person": "C2",
+            "status": "INNOCENT"
+          }
+        }
+      }
+    },
+    {
+      "id": "E2",
+      "name": "Jack",
+      "profession": "Architect",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_E2",
+        "type": "AT_LEAST",
+        "params": {
+          "k": 6,
+          "region": {
+            "type": "EXPLICIT",
+            "value": [
+              "D2",
+              "E2",
+              "A3",
+              "C3",
+              "E3",
+              "B4",
+              "D4"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "A3",
+      "name": "Kara",
+      "profession": "Lawyer",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_A3",
+        "type": "IMPLIES",
+        "params": {
+          "antecedent": {
+            "person": "A3",
+            "status": "CRIMINAL"
+          },
+          "consequent": {
+            "person": "E2",
+            "status": "INNOCENT"
+          }
+        }
+      }
+    },
+    {
+      "id": "B3",
+      "name": "Liam",
+      "profession": "Pilot",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_B3",
+        "type": "AT_LEAST",
+        "params": {
+          "k": 3,
+          "region": {
+            "type": "ROW",
+            "value": 3
+          }
+        }
+      }
+    },
+    {
+      "id": "C3",
+      "name": "Mia",
+      "profession": "Dentist",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_C3",
+        "type": "EXACTLY",
+        "params": {
+          "k": 4,
+          "region": {
+            "type": "NEIGHBORS",
+            "value": "C4"
+          }
+        }
+      }
+    },
+    {
+      "id": "D3",
+      "name": "Noah",
+      "profession": "Programmer",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_D3",
+        "type": "IMPLIES",
+        "params": {
+          "antecedent": {
+            "person": "D3",
+            "status": "INNOCENT"
+          },
+          "consequent": {
+            "person": "C3",
+            "status": "CRIMINAL"
+          }
+        }
+      }
+    },
+    {
+      "id": "E3",
+      "name": "Olivia",
+      "profession": "Pharmacist",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_E3",
+        "type": "DIFFERENT",
+        "params": {
+          "people": [
+            "E3",
+            "D3"
+          ]
+        }
+      }
+    },
+    {
+      "id": "A4",
+      "name": "Paul",
+      "profession": "Journalist",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_A4",
+        "type": "IMPLIES",
+        "params": {
+          "antecedent": {
+            "person": "A4",
+            "status": "INNOCENT"
+          },
+          "consequent": {
+            "person": "D5",
+            "status": "INNOCENT"
+          }
+        }
+      }
+    },
+    {
+      "id": "B4",
+      "name": "Quinn",
+      "profession": "Analyst",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_B4",
+        "type": "IMPLIES",
+        "params": {
+          "antecedent": {
+            "person": "B4",
+            "status": "CRIMINAL"
+          },
+          "consequent": {
+            "person": "E3",
+            "status": "CRIMINAL"
+          }
+        }
+      }
+    },
+    {
+      "id": "C4",
+      "name": "Ruby",
+      "profession": "Designer",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_C4",
+        "type": "PARITY",
+        "params": {
+          "parity": "EVEN",
+          "region": {
+            "type": "EXPLICIT",
+            "value": [
+              "C4",
+              "D4",
+              "E4",
+              "C5",
+              "D5"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "D4",
+      "name": "Sam",
+      "profession": "Accountant",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_D4",
+        "type": "SAME",
+        "params": {
+          "people": [
+            "D4",
+            "B4"
+          ]
+        }
+      }
+    },
+    {
+      "id": "E4",
+      "name": "Tina",
+      "profession": "Researcher",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_E4",
+        "type": "SAME",
+        "params": {
+          "people": [
+            "E4",
+            "C4"
+          ]
+        }
+      }
+    },
+    {
+      "id": "A5",
+      "name": "Uma",
+      "profession": "Manager",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_A5",
+        "type": "IMPLIES",
+        "params": {
+          "antecedent": {
+            "person": "A5",
+            "status": "CRIMINAL"
+          },
+          "consequent": {
+            "person": "E4",
+            "status": "INNOCENT"
+          }
+        }
+      }
+    },
+    {
+      "id": "B5",
+      "name": "Victor",
+      "profession": "Mechanic",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_B5",
+        "type": "EXACTLY",
+        "params": {
+          "k": 3,
+          "region": {
+            "type": "ROW",
+            "value": 5
+          }
+        }
+      }
+    },
+    {
+      "id": "C5",
+      "name": "Wendy",
+      "profession": "Biologist",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_C5",
+        "type": "PARITY",
+        "params": {
+          "parity": "EVEN",
+          "region": {
+            "type": "EXPLICIT",
+            "value": [
+              "B5",
+              "C5",
+              "D5",
+              "E5"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "D5",
+      "name": "Xavier",
+      "profession": "Photographer",
+      "status": "INNOCENT",
+      "clue": {
+        "id": "CL_D5",
+        "type": "DIFFERENT",
+        "params": {
+          "people": [
+            "D5",
+            "C5"
+          ]
+        }
+      }
+    },
+    {
+      "id": "E5",
+      "name": "Yara",
+      "profession": "Consultant",
+      "status": "CRIMINAL",
+      "clue": {
+        "id": "CL_E5",
+        "type": "PARITY",
+        "params": {
+          "parity": "EVEN",
+          "region": {
+            "type": "NEIGHBORS",
+            "value": "C2"
+          }
+        }
+      }
+    }
+  ],
+  "initial_revealed": [
+    "A4",
+    "E5"
+  ]
+}
