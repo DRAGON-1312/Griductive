@@ -98,9 +98,19 @@ class AgentStep:
         - GUI explanations,
         - experiments,
         - debugging.
+
+    active_clue_ids is a snapshot of the clues that were already
+    public and active in the KB BEFORE this deduction was made.
+
+    revealed_clue is the new clue revealed AFTER the verdict was
+    accepted, so it is intentionally not part of active_clue_ids
+    for the same step.
     """
 
     step_number: int
+
+    # Clues available in the public KB before this deduction.
+    active_clue_ids: tuple[str, ...]
 
     character_id: str
     status: Status
@@ -108,6 +118,7 @@ class AgentStep:
 
     verdict_code: VerdictCode
 
+    # Newly revealed only after the verdict is accepted.
     revealed_clue: Clue | None
 
     analysis: EntailmentResult
@@ -338,6 +349,7 @@ class LogicAgent:
             len(public_state.characters)
         )
 
+
     @staticmethod
     def _get_unresolved_character_ids(
         public_state: PublicState,
@@ -351,6 +363,25 @@ class LogicAgent:
             in public_state.characters
             if character_id
             not in public_state.proved_statuses
+        )
+
+
+    @staticmethod
+    def _get_active_clue_ids(
+        public_state: PublicState,
+    ) -> tuple[str, ...]:
+        """
+        Return the identifiers of all clues currently active
+        in the public knowledge base.
+
+        The order follows PublicState.revealed_clues so the trace
+        remains deterministic.
+
+        This method uses public information only.
+        """
+        return tuple(
+            clue.id
+            for clue in public_state.revealed_clues
         )
 
     # ========================================================
@@ -520,6 +551,19 @@ class LogicAgent:
         ):
             return None
 
+        # ----------------------------------------------------
+        # Snapshot the clues that are active BEFORE reasoning.
+        #
+        # This exact set of clues forms the public clue portion
+        # of the KB used to justify this deduction.
+        # ----------------------------------------------------
+
+        active_clue_ids = (
+            self._get_active_clue_ids(
+                public_state
+            )
+        )
+
         hint = self._find_hint_from_state(
             public_state
         )
@@ -567,6 +611,9 @@ class LogicAgent:
         step_result = AgentStep(
             step_number=(
                 len(self._trace) + 1
+            ),
+            active_clue_ids=(
+                active_clue_ids
             ),
             character_id=(
                 hint.character_id
