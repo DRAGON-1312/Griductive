@@ -58,8 +58,16 @@ class SATResult:
             Number of branching decisions made by DPLL.
 
         propagations:
-            Number of variable assignments produced by
-            unit propagation.
+            Number of automatic variable assignments produced by
+            DPLL simplification.
+
+            This includes assignments produced by:
+
+                - unit propagation
+                - pure-literal elimination
+
+            Temporary assumptions supplied directly to solve()
+            are not counted as propagations.
 
         backtracks:
             Number of failed search branches that caused
@@ -115,13 +123,33 @@ class DPLLSolver:
          n -> variable n is True
         -n -> variable n is False
 
-    The solver implements:
+    The solver implements the required DPLL functionality:
 
         1. Unit propagation
         2. Conflict detection
         3. Deterministic variable selection
         4. Recursive branching
         5. Backtracking
+        6. SAT / UNSAT detection with complete SAT assignments
+        7. Solver metrics
+
+    It also implements the optional optimization:
+
+        Pure-literal elimination
+
+    Simplification is repeatedly applied until a fixed point:
+
+        unit propagation
+            ->
+        pure-literal elimination
+            ->
+        unit propagation
+            ->
+        pure-literal elimination
+            ->
+        ...
+
+    until no additional variable assignment can be derived.
 
     Variable selection is deterministic:
 
@@ -132,7 +160,7 @@ class DPLLSolver:
 
         True first, then False.
 
-    This implementation intentionally does not perform
+    This implementation intentionally performs no
     Griductive-specific reasoning. It is a generic SAT solver.
     """
 
@@ -172,7 +200,9 @@ class DPLLSolver:
                     [-3]
                         -> assume variable 3 is False
 
-                Assumptions are useful later for entailment:
+                Assumptions are useful for entailment queries.
+
+                For example:
 
                     KB AND NOT C_i
 
@@ -191,14 +221,18 @@ class DPLLSolver:
         """
         start_time = perf_counter()
 
-        normalized_clauses = self._validate_and_normalize_cnf(
-            clauses,
-            num_variables,
+        normalized_clauses = (
+            self._validate_and_normalize_cnf(
+                clauses,
+                num_variables,
+            )
         )
 
-        normalized_assumptions = self._validate_assumptions(
-            assumptions,
-            num_variables,
+        normalized_assumptions = (
+            self._validate_assumptions(
+                assumptions,
+                num_variables,
+            )
         )
 
         metrics = _SearchMetrics()
@@ -206,16 +240,31 @@ class DPLLSolver:
         initial_assignment: Assignment = {}
 
         # ----------------------------------------------------
-        # Apply assumptions
+        # Apply temporary assumptions.
+        #
+        # Assumptions are externally supplied constraints and are
+        # therefore not counted as DPLL propagations.
         # ----------------------------------------------------
 
         for literal in normalized_assumptions:
-            variable = abs(literal)
-            value = literal > 0
+            variable = abs(
+                literal
+            )
+
+            value = (
+                literal > 0
+            )
 
             if variable in initial_assignment:
-                if initial_assignment[variable] != value:
-                    runtime = perf_counter() - start_time
+
+                if (
+                    initial_assignment[variable]
+                    != value
+                ):
+                    runtime = (
+                        perf_counter()
+                        - start_time
+                    )
 
                     return SATResult(
                         satisfiable=False,
@@ -228,7 +277,9 @@ class DPLLSolver:
 
                 continue
 
-            initial_assignment[variable] = value
+            initial_assignment[
+                variable
+            ] = value
 
         # ----------------------------------------------------
         # DPLL search
@@ -241,7 +292,10 @@ class DPLLSolver:
             metrics,
         )
 
-        runtime = perf_counter() - start_time
+        runtime = (
+            perf_counter()
+            - start_time
+        )
 
         if solution is None:
             return SATResult(
@@ -253,9 +307,11 @@ class DPLLSolver:
                 runtime=runtime,
             )
 
-        complete_assignment = self._complete_assignment(
-            solution,
-            num_variables,
+        complete_assignment = (
+            self._complete_assignment(
+                solution,
+                num_variables,
+            )
         )
 
         return SATResult(
@@ -286,56 +342,72 @@ class DPLLSolver:
             None if UNSAT.
         """
 
-        # ----------------------------------------------------
-        # Step 1: Unit propagation
-        # ----------------------------------------------------
-
-        propagated_assignment = dict(
+        working_assignment = dict(
             assignment
         )
 
-        propagation_success = self._unit_propagate(
-            clauses,
-            propagated_assignment,
-            metrics,
+        # ----------------------------------------------------
+        # Step 1:
+        # Repeated simplification to a fixed point.
+        #
+        # Includes:
+        #
+        #     - unit propagation
+        #     - pure-literal elimination
+        #
+        # Conflict detection is performed during unit propagation.
+        # ----------------------------------------------------
+
+        simplification_success = (
+            self._simplify(
+                clauses,
+                working_assignment,
+                metrics,
+            )
         )
 
-        if not propagation_success:
+        if not simplification_success:
             return None
 
         # ----------------------------------------------------
-        # Step 2: Check whether all clauses are satisfied
+        # Step 2:
+        # Check whether every clause is already satisfied.
         # ----------------------------------------------------
 
         if self._all_clauses_satisfied(
             clauses,
-            propagated_assignment,
+            working_assignment,
         ):
-            return propagated_assignment
+            return working_assignment
 
         # ----------------------------------------------------
-        # Step 3: Choose deterministic branching variable
+        # Step 3:
+        # Choose a deterministic branching variable.
         # ----------------------------------------------------
 
         variable = self._choose_variable(
             clauses,
-            propagated_assignment,
+            working_assignment,
             num_variables,
         )
 
         if variable is None:
-            # If no variable can be selected while the formula
-            # is not satisfied, the branch cannot produce a model.
+            # Defensive fallback.
+            #
+            # If the formula is not satisfied but no unassigned
+            # branching variable exists, this branch cannot produce
+            # a model.
             return None
 
         metrics.decisions += 1
 
         # ----------------------------------------------------
-        # Step 4: Branch True
+        # Step 4:
+        # Branch with variable = True first.
         # ----------------------------------------------------
 
         true_assignment = dict(
-            propagated_assignment
+            working_assignment
         )
 
         true_assignment[
@@ -355,11 +427,12 @@ class DPLLSolver:
         metrics.backtracks += 1
 
         # ----------------------------------------------------
-        # Step 5: Branch False
+        # Step 5:
+        # Backtrack and branch with variable = False.
         # ----------------------------------------------------
 
         false_assignment = dict(
-            propagated_assignment
+            working_assignment
         )
 
         false_assignment[
@@ -381,6 +454,91 @@ class DPLLSolver:
         return None
 
     # ========================================================
+    # Simplification fixed point
+    # ========================================================
+
+    def _simplify(
+        self,
+        clauses: tuple[tuple[int, ...], ...],
+        assignment: Assignment,
+        metrics: _SearchMetrics,
+    ) -> bool:
+        """
+        Repeatedly simplify the current DPLL branch until no new
+        assignments can be derived.
+
+        Simplification order:
+
+            1. Unit propagation
+            2. Check whether the formula is already satisfied
+            3. Pure-literal elimination
+            4. Repeat if the assignment changed
+
+        Returns:
+            True:
+                simplification reached a fixed point without conflict.
+
+            False:
+                a conflict was detected.
+        """
+
+        while True:
+
+            assignment_count_before = len(
+                assignment
+            )
+
+            # ------------------------------------------------
+            # Unit propagation itself runs until no unit clause
+            # remains.
+            # ------------------------------------------------
+
+            propagation_success = (
+                self._unit_propagate(
+                    clauses,
+                    assignment,
+                    metrics,
+                )
+            )
+
+            if not propagation_success:
+                return False
+
+            # ------------------------------------------------
+            # If every clause is satisfied already, no further
+            # simplification is required.
+            # ------------------------------------------------
+
+            if self._all_clauses_satisfied(
+                clauses,
+                assignment,
+            ):
+                return True
+
+            # ------------------------------------------------
+            # Optional DPLL optimization:
+            # pure-literal elimination.
+            # ------------------------------------------------
+
+            self._pure_literal_eliminate(
+                clauses,
+                assignment,
+                metrics,
+            )
+
+            # ------------------------------------------------
+            # If neither unit propagation nor pure-literal
+            # elimination added an assignment during this cycle,
+            # the simplification fixed point has been reached.
+            # ------------------------------------------------
+
+            if (
+                len(assignment)
+                == assignment_count_before
+            ):
+                return True
+
+    # ========================================================
     # Unit propagation
     # ========================================================
 
@@ -396,6 +554,10 @@ class DPLLSolver:
             - no more unit clauses exist, or
             - a conflict is detected.
 
+        Every unit-derived assignment increments:
+
+            metrics.propagations
+
         Returns:
             True:
                 propagation finished without conflict.
@@ -406,10 +568,11 @@ class DPLLSolver:
         Example:
 
             clauses:
+
                 (A)
                 (NOT A OR B)
 
-            Unit propagation:
+            Unit propagation derives:
 
                 A = True
                 B = True
@@ -421,11 +584,14 @@ class DPLLSolver:
             for clause in clauses:
 
                 # --------------------------------------------
-                # Determine clause state
+                # Determine the current state of this clause.
                 # --------------------------------------------
 
                 clause_satisfied = False
-                unassigned_literals: list[int] = []
+
+                unassigned_literals: list[
+                    int
+                ] = []
 
                 for literal in clause:
                     variable = abs(
@@ -436,6 +602,7 @@ class DPLLSolver:
                         unassigned_literals.append(
                             literal
                         )
+
                         continue
 
                     value = assignment[
@@ -450,15 +617,16 @@ class DPLLSolver:
                         break
 
                 # --------------------------------------------
-                # Already satisfied
+                # Clause already has a true literal.
                 # --------------------------------------------
 
                 if clause_satisfied:
                     continue
 
                 # --------------------------------------------
-                # No satisfying literal and no unassigned
-                # literal -> conflict
+                # No true literal and no unassigned literal:
+                #
+                # the clause is false -> conflict.
                 # --------------------------------------------
 
                 if not unassigned_literals:
@@ -466,21 +634,23 @@ class DPLLSolver:
 
                 # --------------------------------------------
                 # More than one unassigned literal:
-                # not a unit clause yet
+                #
+                # not a unit clause yet.
                 # --------------------------------------------
 
-                if len(
-                    unassigned_literals
-                ) != 1:
+                if (
+                    len(unassigned_literals)
+                    != 1
+                ):
                     continue
 
                 # --------------------------------------------
-                # Unit clause
+                # Unit clause.
                 # --------------------------------------------
 
-                unit_literal = unassigned_literals[
-                    0
-                ]
+                unit_literal = (
+                    unassigned_literals[0]
+                )
 
                 variable = abs(
                     unit_literal
@@ -490,7 +660,13 @@ class DPLLSolver:
                     unit_literal > 0
                 )
 
+                # Normally the variable is unassigned because it
+                # came from unassigned_literals.
+                #
+                # Keep this defensive check to protect against
+                # unexpected state inconsistencies.
                 if variable in assignment:
+
                     if (
                         assignment[variable]
                         != required_value
@@ -504,10 +680,162 @@ class DPLLSolver:
                 ] = required_value
 
                 metrics.propagations += 1
+
                 changed = True
 
             if not changed:
                 return True
+
+    # ========================================================
+    # Pure-literal elimination
+    # ========================================================
+
+    def _pure_literal_eliminate(
+        self,
+        clauses: tuple[tuple[int, ...], ...],
+        assignment: Assignment,
+        metrics: _SearchMetrics,
+    ) -> bool:
+        """
+        Assign all currently pure literals in unresolved clauses.
+
+        A variable is pure when, among all unresolved clauses, it
+        occurs with exactly one polarity.
+
+        Examples:
+
+            A appears only as:
+
+                A
+
+            and never as:
+
+                NOT A
+
+            -> assign:
+
+                A = True
+
+
+            B appears only as:
+
+                NOT B
+
+            and never as:
+
+                B
+
+            -> assign:
+
+                B = False
+
+        Pure-literal assignments preserve satisfiability and avoid
+        unnecessary branching.
+
+        Only unresolved clauses are considered. Clauses already
+        satisfied by the current assignment are ignored.
+
+        Every pure-literal assignment increments:
+
+            metrics.propagations
+
+        Returns:
+            True if at least one pure literal was assigned.
+            False otherwise.
+        """
+
+        # Bit masks:
+        #
+        #     1 -> positive occurrence
+        #     2 -> negative occurrence
+        #     3 -> both polarities
+        #
+        polarity_masks: dict[
+            int,
+            int,
+        ] = {}
+
+        for clause in clauses:
+
+            # ------------------------------------------------
+            # Satisfied clauses no longer constrain the search.
+            # ------------------------------------------------
+
+            if self._clause_is_satisfied(
+                clause,
+                assignment,
+            ):
+                continue
+
+            for literal in clause:
+                variable = abs(
+                    literal
+                )
+
+                # Already assigned variables do not need
+                # pure-literal analysis.
+                if variable in assignment:
+                    continue
+
+                polarity = (
+                    1
+                    if literal > 0
+                    else 2
+                )
+
+                polarity_masks[
+                    variable
+                ] = (
+                    polarity_masks.get(
+                        variable,
+                        0,
+                    )
+                    | polarity
+                )
+
+        changed = False
+
+        # ----------------------------------------------------
+        # Deterministic application order.
+        #
+        # This keeps solver behavior reproducible.
+        # ----------------------------------------------------
+
+        for variable in sorted(
+            polarity_masks
+        ):
+            polarity = (
+                polarity_masks[
+                    variable
+                ]
+            )
+
+            # Positive-only variable.
+            if polarity == 1:
+                assignment[
+                    variable
+                ] = True
+
+                metrics.propagations += 1
+
+                changed = True
+
+            # Negative-only variable.
+            elif polarity == 2:
+                assignment[
+                    variable
+                ] = False
+
+                metrics.propagations += 1
+
+                changed = True
+
+            # polarity == 3:
+            #
+            # both positive and negative occurrences exist,
+            # therefore the variable is not pure.
+
+        return changed
 
     # ========================================================
     # Deterministic variable selection
@@ -523,16 +851,19 @@ class DPLLSolver:
         Choose the smallest unassigned variable occurring in an
         unresolved clause.
 
-        This makes DPLL deterministic.
+        This keeps branching deterministic.
 
         Example:
 
             unresolved variables:
+
                 {2, 5, 7}
 
             selected:
+
                 2
         """
+
         candidates: set[int] = set()
 
         for clause in clauses:
@@ -558,10 +889,13 @@ class DPLLSolver:
                 candidates
             )
 
+        # ----------------------------------------------------
         # Defensive fallback.
         #
-        # Normally every unresolved formula has at least one
-        # unassigned variable in an unresolved clause.
+        # Normally every unresolved formula must have at least
+        # one unassigned variable in an unresolved clause.
+        # ----------------------------------------------------
+
         for variable in range(
             1,
             num_variables + 1,
@@ -581,8 +915,10 @@ class DPLLSolver:
         assignment: Assignment,
     ) -> bool:
         """
-        Return True iff every clause already has a true literal.
+        Return True iff every clause currently contains at least
+        one true literal.
         """
+
         return all(
             self._clause_is_satisfied(
                 clause,
@@ -600,6 +936,7 @@ class DPLLSolver:
         Return True iff the clause currently contains a literal
         that evaluates to True.
         """
+
         for literal in clause:
             variable = abs(
                 literal
@@ -632,12 +969,16 @@ class DPLLSolver:
 
             literal = 3
             variable_value = True
+
                 -> True
+
 
             literal = -3
             variable_value = False
+
                 -> True
         """
+
         if literal > 0:
             return variable_value
 
@@ -655,14 +996,16 @@ class DPLLSolver:
         """
         Complete a partial satisfying assignment.
 
-        DPLL may satisfy all clauses before every variable has
-        received a value.
+        DPLL may satisfy every clause before every declared
+        variable has received a value.
 
         Remaining variables are deterministically assigned False.
 
-        Since all clauses are already satisfied, these additional
-        values cannot invalidate the discovered model.
+        Since every clause is already satisfied by at least one
+        assigned true literal, extending the assignment cannot
+        invalidate the discovered SAT model.
         """
+
         complete = dict(
             assignment
         )
@@ -690,20 +1033,35 @@ class DPLLSolver:
         """
         Validate CNF input and convert it to immutable tuples.
 
-        Also removes duplicate literals from individual clauses.
+        Normalization also:
 
-        Tautological clauses such as:
+            - removes duplicate literals inside clauses
+            - removes tautological clauses
+
+        Example tautology:
 
             (A OR NOT A OR B)
 
-        are removed because they are always satisfied.
+        Such a clause is always satisfied and therefore does not
+        constrain the SAT problem.
+
+        Important:
+            Even after a tautology is detected, every remaining
+            literal in that clause is still validated.
+
+        This prevents malformed trailing literals from being
+        silently ignored.
         """
-        if not isinstance(
-            num_variables,
-            int,
-        ) or isinstance(
-            num_variables,
-            bool,
+
+        if (
+            not isinstance(
+                num_variables,
+                int,
+            )
+            or isinstance(
+                num_variables,
+                bool,
+            )
         ):
             raise TypeError(
                 "num_variables must be an integer."
@@ -729,6 +1087,7 @@ class DPLLSolver:
         for clause_index, clause in enumerate(
             clauses
         ):
+
             if not isinstance(
                 clause,
                 Sequence,
@@ -738,16 +1097,34 @@ class DPLLSolver:
                     f"must be a sequence."
                 )
 
-            seen_literals: set[int] = set()
+            seen_literals: set[
+                int
+            ] = set()
+
+            unique_literals: list[
+                int
+            ] = []
+
             tautology = False
 
+            # ------------------------------------------------
+            # Validate every literal.
+            #
+            # Do not break early when a tautology is discovered,
+            # because later literals must still be validated.
+            # ------------------------------------------------
+
             for literal in clause:
-                if not isinstance(
-                    literal,
-                    int,
-                ) or isinstance(
-                    literal,
-                    bool,
+
+                if (
+                    not isinstance(
+                        literal,
+                        int,
+                    )
+                    or isinstance(
+                        literal,
+                        bool,
+                    )
                 ):
                     raise InvalidCNFError(
                         f"Clause {clause_index} contains "
@@ -771,32 +1148,32 @@ class DPLLSolver:
                         f"num_variables={num_variables}."
                     )
 
+                # --------------------------------------------
+                # Detect complementary literals:
+                #
+                #     A OR NOT A
+                # --------------------------------------------
+
                 if -literal in seen_literals:
                     tautology = True
-                    break
 
-                seen_literals.add(
-                    literal
-                )
+                # --------------------------------------------
+                # Preserve only the first occurrence of each
+                # literal.
+                # --------------------------------------------
 
-            if tautology:
-                # Always-satisfied clause can safely be removed.
-                continue
-
-            # Deterministic ordering while preserving the first
-            # occurrence of each literal.
-            unique_literals: list[int] = []
-            already_added: set[int] = set()
-
-            for literal in clause:
-                if literal not in already_added:
-                    already_added.add(
+                if literal not in seen_literals:
+                    seen_literals.add(
                         literal
                     )
 
                     unique_literals.append(
                         literal
                     )
+
+            if tautology:
+                # Always-satisfied clause can safely be removed.
+                continue
 
             normalized_cnf.append(
                 tuple(
@@ -819,7 +1196,13 @@ class DPLLSolver:
     ) -> tuple[int, ...]:
         """
         Validate temporary assumption literals.
+
+        Assumptions use the same literal convention as CNF:
+
+             n -> variable n is True
+            -n -> variable n is False
         """
+
         if assumptions is None:
             return ()
 
@@ -833,15 +1216,21 @@ class DPLLSolver:
                 "assumptions must be an iterable of integers."
             ) from exc
 
-        normalized: list[int] = []
+        normalized: list[
+            int
+        ] = []
 
         for literal in assumptions_tuple:
-            if not isinstance(
-                literal,
-                int,
-            ) or isinstance(
-                literal,
-                bool,
+
+            if (
+                not isinstance(
+                    literal,
+                    int,
+                )
+                or isinstance(
+                    literal,
+                    bool,
+                )
             ):
                 raise InvalidAssumptionError(
                     "Assumption literals must be integers."

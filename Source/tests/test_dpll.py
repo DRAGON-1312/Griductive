@@ -1,3 +1,4 @@
+from itertools import product
 from pathlib import Path
 
 import pytest
@@ -45,6 +46,37 @@ def formula_is_satisfied(
     return True
 
 
+def brute_force_is_sat(
+    clauses: list[list[int]],
+    num_variables: int,
+) -> bool:
+    """
+    Small reference SAT checker used only by tests.
+
+    Exhaustively enumerates all Boolean assignments, so it is
+    appropriate only for very small formulas.
+    """
+    for values in product(
+        [False, True],
+        repeat=num_variables,
+    ):
+        assignment = {
+            variable: values[variable - 1]
+            for variable in range(
+                1,
+                num_variables + 1,
+            )
+        }
+
+        if formula_is_satisfied(
+            clauses,
+            assignment,
+        ):
+            return True
+
+    return False
+
+
 def puzzle_3x3_path() -> Path:
     return (
         Path(__file__).resolve().parents[1]
@@ -59,7 +91,7 @@ def puzzle_3x3_path() -> Path:
 
 def test_simple_sat_formula():
     """
-    (A) AND (B)
+    A AND B
 
     Unique satisfying assignment:
 
@@ -95,18 +127,14 @@ def test_simple_sat_formula():
 def test_simple_unsat_formula():
     """
     A AND NOT A
-
-    is immediately inconsistent.
     """
     solver = DPLLSolver()
 
-    clauses = [
-        [1],
-        [-1],
-    ]
-
     result = solver.solve(
-        clauses,
+        clauses=[
+            [1],
+            [-1],
+        ],
         num_variables=1,
     )
 
@@ -126,13 +154,13 @@ def test_unit_propagation_chain():
         (NOT A OR B)
         (NOT B OR C)
 
-    Unit propagation must derive:
+    Unit propagation derives:
 
         A = True
         B = True
         C = True
 
-    without any branching.
+    without branching.
     """
     solver = DPLLSolver()
 
@@ -148,6 +176,7 @@ def test_unit_propagation_chain():
     )
 
     assert result.satisfiable is True
+
     assert result.assignment == {
         1: True,
         2: True,
@@ -165,20 +194,49 @@ def test_unit_propagation_detects_conflict():
     (NOT A OR B)
     NOT B
 
-    gives:
+    is inconsistent.
+    """
+    solver = DPLLSolver()
 
-        A = True
+    result = solver.solve(
+        clauses=[
+            [1],
+            [-1, 2],
+            [-2],
+        ],
+        num_variables=2,
+    )
+
+    assert result.satisfiable is False
+    assert result.assignment is None
+
+    assert result.decisions == 0
+
+
+# ============================================================
+# Pure-literal elimination
+# ============================================================
+
+def test_positive_pure_literal_eliminates_branching():
+    """
+    CNF:
+
+        (A OR B)
+        (NOT A OR B)
+
+    B occurs only positively.
+
+    Therefore B is a positive pure literal and DPLL can set:
+
         B = True
-        B = False
 
-    so the formula is UNSAT.
+    without branching on A.
     """
     solver = DPLLSolver()
 
     clauses = [
-        [1],
+        [1, 2],
         [-1, 2],
-        [-2],
     ]
 
     result = solver.solve(
@@ -186,11 +244,234 @@ def test_unit_propagation_detects_conflict():
         num_variables=2,
     )
 
-    assert result.satisfiable is False
-    assert result.assignment is None
+    assert result.satisfiable is True
 
-    # No branching is required to discover the conflict.
+    assert result.assignment == {
+        1: False,
+        2: True,
+    }
+
     assert result.decisions == 0
+    assert result.propagations == 1
+    assert result.backtracks == 0
+
+    assert formula_is_satisfied(
+        clauses,
+        result.assignment,
+    )
+
+
+def test_negative_pure_literal_eliminates_branching():
+    """
+    CNF:
+
+        (A OR NOT B)
+        (NOT A OR NOT B)
+
+    B occurs only negatively.
+
+    Therefore:
+
+        B = False
+
+    satisfies both clauses without branching.
+    """
+    solver = DPLLSolver()
+
+    clauses = [
+        [1, -2],
+        [-1, -2],
+    ]
+
+    result = solver.solve(
+        clauses,
+        num_variables=2,
+    )
+
+    assert result.satisfiable is True
+
+    assert result.assignment == {
+        1: False,
+        2: False,
+    }
+
+    assert result.decisions == 0
+    assert result.propagations == 1
+    assert result.backtracks == 0
+
+    assert formula_is_satisfied(
+        clauses,
+        result.assignment,
+    )
+
+
+def test_pure_literal_elimination_reaches_fixed_point():
+    """
+    Initially:
+
+        A is pure positive.
+
+        B and C are not pure.
+
+    CNF:
+
+        (A OR B)
+        (A OR NOT B)
+        (B OR C)
+        (B OR NOT C)
+
+    First pure-literal step:
+
+        A = True
+
+    The first two clauses become satisfied.
+
+    In the remaining unresolved clauses B now occurs only
+    positively, so a second simplification round derives:
+
+        B = True
+
+    This verifies repeated pure-literal elimination until a
+    fixed point.
+    """
+    solver = DPLLSolver()
+
+    clauses = [
+        [1, 2],
+        [1, -2],
+        [2, 3],
+        [2, -3],
+    ]
+
+    result = solver.solve(
+        clauses,
+        num_variables=3,
+    )
+
+    assert result.satisfiable is True
+
+    assert result.assignment == {
+        1: True,
+        2: True,
+        3: False,
+    }
+
+    assert result.decisions == 0
+
+    # A and B are both assigned automatically.
+    assert result.propagations == 2
+
+    assert result.backtracks == 0
+
+    assert formula_is_satisfied(
+        clauses,
+        result.assignment,
+    )
+
+
+def test_pure_literal_analysis_ignores_satisfied_clauses():
+    """
+    Under assumption:
+
+        A = True
+
+    clause:
+
+        (A OR NOT B)
+
+    is already satisfied and must no longer count the negative
+    occurrence of B.
+
+    Remaining unresolved clauses:
+
+        (B OR C)
+        (B OR NOT C)
+
+    make B pure positive.
+
+    Therefore B should be assigned automatically without a
+    branching decision.
+    """
+    solver = DPLLSolver()
+
+    clauses = [
+        [1, -2],
+        [2, 3],
+        [2, -3],
+    ]
+
+    result = solver.solve(
+        clauses,
+        num_variables=3,
+        assumptions=[
+            1,
+        ],
+    )
+
+    assert result.satisfiable is True
+    assert result.assignment is not None
+
+    assert result.assignment[1] is True
+    assert result.assignment[2] is True
+
+    assert result.decisions == 0
+
+    # Assumption A=True is not counted.
+    # Only pure-literal B=True is a propagation.
+    assert result.propagations == 1
+
+    assert formula_is_satisfied(
+        clauses,
+        result.assignment,
+    )
+
+
+def test_unit_propagation_can_enable_pure_literal_elimination():
+    """
+    CNF:
+
+        A
+        (A OR NOT B)
+        (B OR C)
+        (B OR NOT C)
+
+    Unit propagation first derives:
+
+        A = True
+
+    This satisfies the second clause.
+
+    B then becomes pure positive in the unresolved clauses and
+    can be assigned automatically.
+    """
+    solver = DPLLSolver()
+
+    clauses = [
+        [1],
+        [1, -2],
+        [2, 3],
+        [2, -3],
+    ]
+
+    result = solver.solve(
+        clauses,
+        num_variables=3,
+    )
+
+    assert result.satisfiable is True
+
+    assert result.assignment == {
+        1: True,
+        2: True,
+        3: False,
+    }
+
+    assert result.decisions == 0
+
+    # A by unit propagation + B by pure-literal elimination.
+    assert result.propagations == 2
+
+    assert result.backtracks == 0
 
 
 # ============================================================
@@ -203,20 +484,37 @@ def test_branching_uses_smallest_unassigned_variable():
 
         (A OR B)
         (NOT A OR B)
+        (A OR NOT B)
 
-    There is no initial unit clause.
+    There are:
 
-    Deterministic branching selects A (variable 1)
-    before B (variable 2), trying True first.
+        - no unit clauses
+        - no pure literals
 
-    With A=True:
-        B is forced True.
+    Both A and B occur positively and negatively.
+
+    Therefore simplification cannot solve the formula and DPLL
+    must branch.
+
+    Deterministic selection must choose variable 1 (A) first,
+    and deterministic branch order tries:
+
+        A = True
+
+    first.
+
+    That forces:
+
+        B = True
+
+    and satisfies the formula.
     """
     solver = DPLLSolver()
 
     clauses = [
         [1, 2],
         [-1, 2],
+        [1, -2],
     ]
 
     result = solver.solve(
@@ -233,6 +531,11 @@ def test_branching_uses_smallest_unassigned_variable():
     assert result.decisions == 1
     assert result.backtracks == 0
 
+    assert formula_is_satisfied(
+        clauses,
+        result.assignment,
+    )
+
 
 # ============================================================
 # Backtracking
@@ -246,25 +549,19 @@ def test_backtracking_after_failed_true_branch():
         (NOT A OR B)
         (NOT A OR NOT B)
 
-    Branch order tries:
+    Initially there are no unit clauses or pure literals.
 
-        A = True
+    DPLL chooses A first.
 
-    Then:
-        second clause forces B=True
-        third clause requires B=False
-
-    -> conflict.
+    A=True leads to a conflict.
 
     DPLL must backtrack and try:
 
-        A = False
+        A=False
 
-    which forces:
+    which gives a satisfying assignment with:
 
-        B = True
-
-    and satisfies the formula.
+        B=True.
     """
     solver = DPLLSolver()
 
@@ -280,6 +577,7 @@ def test_backtracking_after_failed_true_branch():
     )
 
     assert result.satisfiable is True
+
     assert result.assignment == {
         1: False,
         2: True,
@@ -296,16 +594,16 @@ def test_backtracking_after_failed_true_branch():
 
 def test_unsat_formula_requires_both_branches_to_fail():
     """
-    All four combinations of A and B are forbidden.
+    These four clauses forbid all four assignments of A and B:
 
         (A OR B)
         (A OR NOT B)
         (NOT A OR B)
         (NOT A OR NOT B)
 
-    Therefore UNSAT.
+    No pure literals exist.
 
-    DPLL must try both values of A.
+    Both branches of A must fail.
     """
     solver = DPLLSolver()
 
@@ -336,8 +634,7 @@ def test_sat_result_contains_complete_assignment():
     """
     Variables 2 and 3 do not occur in the formula.
 
-    DPLL may solve the formula after setting only variable 1,
-    but the returned SAT model must assign all variables.
+    The returned SAT model must still assign all variables.
     """
     solver = DPLLSolver()
 
@@ -416,13 +713,11 @@ def test_positive_assumption():
 
         (A OR B)
 
-    Temporary assumption:
+    Under:
 
         NOT A
 
-    must force:
-
-        B = True
+    B must become True.
     """
     solver = DPLLSolver()
 
@@ -445,19 +740,33 @@ def test_positive_assumption():
     assert result.assignment[2] is True
 
 
+def test_assumptions_are_not_counted_as_propagations():
+    solver = DPLLSolver()
+
+    result = solver.solve(
+        clauses=[],
+        num_variables=2,
+        assumptions=[
+            1,
+        ],
+    )
+
+    assert result.satisfiable is True
+
+    assert result.assignment == {
+        1: True,
+        2: False,
+    }
+
+    assert result.propagations == 0
+    assert result.decisions == 0
+
+
 def test_assumption_can_make_sat_formula_unsat():
     """
-    Formula itself:
+    A is SAT normally.
 
-        A
-
-    is SAT.
-
-    Under assumption:
-
-        NOT A
-
-    it becomes UNSAT.
+    Under assumption NOT A it becomes UNSAT.
     """
     solver = DPLLSolver()
 
@@ -511,6 +820,7 @@ def test_duplicate_same_assumption_is_allowed():
     )
 
     assert result.satisfiable is True
+
     assert result.assignment == {
         1: True,
     }
@@ -534,6 +844,7 @@ def test_duplicate_literals_are_removed_semantically():
     )
 
     assert result.satisfiable is True
+
     assert result.assignment == {
         1: True,
     }
@@ -545,8 +856,7 @@ def test_tautological_clause_is_ignored():
     """
     (A OR NOT A) is always True.
 
-    With no remaining constraints, the complete assignment
-    deterministically fills A=False.
+    With no remaining constraint, A is completed as False.
     """
     solver = DPLLSolver()
 
@@ -564,6 +874,44 @@ def test_tautological_clause_is_ignored():
     }
 
     assert result.decisions == 0
+    assert result.propagations == 0
+
+
+def test_tautology_does_not_skip_validation_of_later_literal():
+    """
+    Even after detecting:
+
+        A OR NOT A
+
+    DPLL must still validate the rest of the original clause.
+
+    Variable 3 is invalid when num_variables=2.
+    """
+    solver = DPLLSolver()
+
+    with pytest.raises(
+        InvalidCNFError
+    ):
+        solver.solve(
+            clauses=[
+                [1, -1, 3],
+            ],
+            num_variables=2,
+        )
+
+
+def test_tautology_does_not_skip_zero_literal_validation():
+    solver = DPLLSolver()
+
+    with pytest.raises(
+        InvalidCNFError
+    ):
+        solver.solve(
+            clauses=[
+                [1, -1, 0],
+            ],
+            num_variables=2,
+        )
 
 
 # ============================================================
@@ -585,6 +933,26 @@ def test_solver_records_metrics():
     assert result.propagations >= 0
     assert result.backtracks >= 0
     assert result.runtime >= 0.0
+
+
+def test_pure_literal_assignments_count_as_propagations():
+    solver = DPLLSolver()
+
+    result = solver.solve(
+        clauses=[
+            [1, 2],
+            [-1, 2],
+        ],
+        num_variables=2,
+    )
+
+    assert result.satisfiable is True
+
+    # B=True is obtained by pure-literal elimination.
+    assert result.propagations == 1
+
+    # No branching is required.
+    assert result.decisions == 0
 
 
 # ============================================================
@@ -633,6 +1001,20 @@ def test_non_integer_literal_is_invalid():
         )
 
 
+def test_boolean_literal_is_invalid():
+    solver = DPLLSolver()
+
+    with pytest.raises(
+        InvalidCNFError
+    ):
+        solver.solve(
+            clauses=[
+                [True],
+            ],
+            num_variables=1,
+        )
+
+
 def test_invalid_assumption_zero():
     solver = DPLLSolver()
 
@@ -663,6 +1045,21 @@ def test_invalid_assumption_variable():
         )
 
 
+def test_boolean_assumption_is_invalid():
+    solver = DPLLSolver()
+
+    with pytest.raises(
+        InvalidAssumptionError
+    ):
+        solver.solve(
+            clauses=[],
+            num_variables=1,
+            assumptions=[
+                True,
+            ],
+        )
+
+
 def test_negative_num_variables_is_invalid():
     solver = DPLLSolver()
 
@@ -675,6 +1072,127 @@ def test_negative_num_variables_is_invalid():
         )
 
 
+def test_boolean_num_variables_is_invalid():
+    solver = DPLLSolver()
+
+    with pytest.raises(
+        TypeError
+    ):
+        solver.solve(
+            clauses=[],
+            num_variables=True,
+        )
+
+
+# ============================================================
+# Reference comparison against brute force
+# ============================================================
+
+@pytest.mark.parametrize(
+    (
+        "clauses",
+        "num_variables",
+    ),
+    [
+        (
+            [],
+            2,
+        ),
+        (
+            [
+                [1],
+            ],
+            1,
+        ),
+        (
+            [
+                [1],
+                [-1],
+            ],
+            1,
+        ),
+        (
+            [
+                [1, 2],
+                [-1, 2],
+            ],
+            2,
+        ),
+        (
+            [
+                [1, -2],
+                [-1, -2],
+            ],
+            2,
+        ),
+        (
+            [
+                [1, 2],
+                [-1, 2],
+                [1, -2],
+            ],
+            2,
+        ),
+        (
+            [
+                [1, 2],
+                [1, -2],
+                [-1, 2],
+                [-1, -2],
+            ],
+            2,
+        ),
+        (
+            [
+                [1, 2],
+                [1, -2],
+                [2, 3],
+                [2, -3],
+            ],
+            3,
+        ),
+    ],
+)
+def test_dpll_matches_brute_force_on_small_formulas(
+    clauses,
+    num_variables,
+):
+    """
+    Cross-check DPLL against exhaustive Boolean enumeration.
+
+    This provides an implementation-independent reference for
+    small formulas and helps ensure that optional simplifications
+    such as pure-literal elimination preserve SAT semantics.
+    """
+    solver = DPLLSolver()
+
+    expected_sat = brute_force_is_sat(
+        clauses,
+        num_variables,
+    )
+
+    result = solver.solve(
+        clauses,
+        num_variables=num_variables,
+    )
+
+    assert (
+        result.satisfiable
+        == expected_sat
+    )
+
+    if result.satisfiable:
+        assert result.assignment is not None
+
+        assert formula_is_satisfied(
+            clauses,
+            result.assignment,
+        )
+
+    else:
+        assert result.assignment is None
+
+
 # ============================================================
 # Integration: CNF Encoder
 # ============================================================
@@ -683,9 +1201,7 @@ def test_dpll_solves_encoded_basic_3x3_full_clue_set():
     """
     Encode every clue in puzzle_3x3_01 and solve the resulting CNF.
 
-    Because this sanity puzzle is designed so that its complete clue
-    set determines all characters, DPLL should recover the known
-    hidden assignment.
+    The complete clue set determines the designed hidden solution.
     """
     puzzle = load_puzzle(
         puzzle_3x3_path()
@@ -716,8 +1232,6 @@ def test_dpll_solves_encoded_basic_3x3_full_clue_set():
     assert result.satisfiable is True
     assert result.assignment is not None
 
-    # Compare DPLL's Boolean model with the puzzle's
-    # known hidden assignment.
     for character_id, secret in puzzle.secrets.items():
         variable = encoder.variable_for(
             character_id
@@ -770,22 +1284,23 @@ def test_initial_public_kb_is_sat():
 
 def test_initial_public_kb_forces_a1_criminal_using_assumption():
     """
-    Initial public knowledge in puzzle_3x3_01:
+    Initial public KB contains:
 
         B2 = CRIMINAL
 
-        B2's revealed clue:
-            A1 = CRIMINAL
+    and B2's revealed clue:
+
+        A1 = CRIMINAL
 
     Therefore:
 
         KB |= A1
 
-    which is equivalent to:
+    so:
 
         KB AND NOT A1
 
-    being UNSAT.
+    must be UNSAT.
     """
     puzzle = load_puzzle(
         puzzle_3x3_path()
@@ -825,9 +1340,9 @@ def test_initial_public_kb_forces_a1_criminal_using_assumption():
 
 def test_initial_public_kb_accepts_a1_criminal_assumption():
     """
-    The opposite assumption:
+    Since A1 is forced Criminal:
 
-        A1 = CRIMINAL
+        KB AND A1
 
     must remain SAT.
     """
