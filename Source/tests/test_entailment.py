@@ -692,3 +692,186 @@ def test_invalid_solver_type():
             size=3,
             solver="not-a-solver",
         )
+
+
+# ============================================================
+# SAT-call metrics
+# ============================================================
+
+def test_initial_sat_call_count_is_zero():
+    checker = EntailmentChecker(
+        size=3
+    )
+
+    assert checker.sat_call_count == 0
+
+
+def test_analyze_character_records_two_sat_calls():
+    puzzle, public_state = (
+        load_initial_public_state()
+    )
+
+    checker = EntailmentChecker(
+        size=puzzle.size
+    )
+
+    result = checker.analyze_character(
+        public_state,
+        "A1",
+    )
+
+    assert result.sat_calls == 2
+    assert checker.sat_call_count == 2
+
+
+def test_classify_character_records_two_sat_calls():
+    puzzle, public_state = (
+        load_initial_public_state()
+    )
+
+    checker = EntailmentChecker(
+        size=puzzle.size
+    )
+
+    checker.classify_character(
+        public_state,
+        "A1",
+    )
+
+    assert checker.sat_call_count == 2
+
+
+def test_is_kb_consistent_records_one_sat_call():
+    puzzle, public_state = (
+        load_initial_public_state()
+    )
+
+    checker = EntailmentChecker(
+        size=puzzle.size
+    )
+
+    checker.is_kb_consistent(
+        public_state
+    )
+
+    assert checker.sat_call_count == 1
+
+
+def test_analyze_all_unresolved_records_sixteen_sat_calls():
+    """
+    puzzle_3x3_01 begins with B2 already proved.
+
+    Therefore 8 characters remain unresolved.
+
+        8 characters * 2 SAT calls = 16.
+    """
+    puzzle, public_state = (
+        load_initial_public_state()
+    )
+
+    checker = EntailmentChecker(
+        size=puzzle.size
+    )
+
+    results = checker.analyze_all(
+        public_state
+    )
+
+    assert len(results) == 8
+    assert checker.sat_call_count == 16
+
+
+def test_analyze_all_characters_records_eighteen_sat_calls():
+    puzzle, public_state = (
+        load_initial_public_state()
+    )
+
+    checker = EntailmentChecker(
+        size=puzzle.size
+    )
+
+    results = checker.analyze_all(
+        public_state,
+        only_unresolved=False,
+    )
+
+    assert len(results) == 9
+
+    # 9 characters * 2 SAT calls.
+    assert checker.sat_call_count == 18
+
+
+def test_sat_call_count_is_cumulative():
+    puzzle, public_state = (
+        load_initial_public_state()
+    )
+
+    checker = EntailmentChecker(
+        size=puzzle.size
+    )
+
+    checker.analyze_character(
+        public_state,
+        "A1",
+    )
+
+    assert checker.sat_call_count == 2
+
+    checker.analyze_character(
+        public_state,
+        "B1",
+    )
+
+    assert checker.sat_call_count == 4
+
+    checker.is_kb_consistent(
+        public_state
+    )
+
+    assert checker.sat_call_count == 5
+
+
+def test_reset_sat_call_count():
+    puzzle, public_state = (
+        load_initial_public_state()
+    )
+
+    checker = EntailmentChecker(
+        size=puzzle.size
+    )
+
+    checker.analyze_character(
+        public_state,
+        "A1",
+    )
+
+    assert checker.sat_call_count == 2
+
+    checker.reset_sat_call_count()
+
+    assert checker.sat_call_count == 0
+
+
+def test_sat_call_counter_matches_recording_solver():
+    puzzle, public_state = (
+        load_initial_public_state()
+    )
+
+    solver = RecordingDPLLSolver()
+
+    checker = EntailmentChecker(
+        size=puzzle.size,
+        solver=solver,
+    )
+
+    checker.analyze_character(
+        public_state,
+        "A1",
+    )
+
+    checker.is_kb_consistent(
+        public_state
+    )
+
+    assert checker.sat_call_count == 3
+    assert len(solver.calls) == 3

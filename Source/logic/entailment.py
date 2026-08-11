@@ -113,6 +113,17 @@ class EntailmentResult:
         )
 
     @property
+    def sat_calls(self) -> int:
+        """
+        Every character entailment analysis consists of exactly
+        two SAT queries:
+
+            KB AND NOT C_i
+            KB AND C_i
+        """
+        return 2
+
+    @property
     def total_decisions(self) -> int:
         return (
             self.assume_innocent_result.decisions
@@ -235,6 +246,61 @@ class EntailmentChecker:
             else DPLLSolver()
         )
 
+        # Number of actual DPLL.solve() calls made through
+        # this EntailmentChecker instance.
+        self._sat_call_count = 0
+
+    # ========================================================
+    # SAT-call metrics
+    # ========================================================
+
+    @property
+    def sat_call_count(self) -> int:
+        """
+        Cumulative number of actual SAT solver calls performed
+        by this EntailmentChecker instance.
+
+        This includes calls made by:
+
+            - analyze_character()
+            - classify_character()
+            - analyze_all()
+            - classify_all()
+            - is_kb_consistent()
+
+        Rebuilding or encoding the KB is not a SAT call.
+        """
+        return self._sat_call_count
+
+    def reset_sat_call_count(self) -> None:
+        """
+        Reset the cumulative SAT-call counter to zero.
+
+        This does not modify the solver, puzzle state, or KB.
+        """
+        self._sat_call_count = 0
+
+    def _solve(
+        self,
+        *,
+        clauses: list[list[int]],
+        num_variables: int,
+        assumptions: list[int] | None = None,
+    ) -> SATResult:
+        """
+        Execute exactly one SAT call and record it.
+
+        All EntailmentChecker SAT queries must pass through this
+        helper so sat_call_count remains accurate.
+        """
+        self._sat_call_count += 1
+
+        return self._solver.solve(
+            clauses=clauses,
+            num_variables=num_variables,
+            assumptions=assumptions,
+        )
+
     # ========================================================
     # Main classifier API
     # ========================================================
@@ -314,7 +380,7 @@ class EntailmentChecker:
         # therefore the character is forced CRIMINAL.
         # ----------------------------------------------------
 
-        assume_innocent_result = self._solver.solve(
+        assume_innocent_result = self._solve(
             clauses=kb,
             num_variables=encoder.total_variable_count,
             assumptions=[
@@ -336,7 +402,7 @@ class EntailmentChecker:
         # therefore the character is forced INNOCENT.
         # ----------------------------------------------------
 
-        assume_criminal_result = self._solver.solve(
+        assume_criminal_result = self._solve(
             clauses=kb,
             num_variables=encoder.total_variable_count,
             assumptions=[
@@ -416,7 +482,7 @@ class EntailmentChecker:
                 character_id
             )
 
-            assume_innocent_result = self._solver.solve(
+            assume_innocent_result = self._solve(
                 clauses=kb,
                 num_variables=encoder.total_variable_count,
                 assumptions=[
@@ -424,7 +490,7 @@ class EntailmentChecker:
                 ],
             )
 
-            assume_criminal_result = self._solver.solve(
+            assume_criminal_result = self._solve(
                 clauses=kb,
                 num_variables=encoder.total_variable_count,
                 assumptions=[
@@ -497,7 +563,7 @@ class EntailmentChecker:
             public_state
         )
 
-        result = self._solver.solve(
+        result = self._solve(
             clauses=kb,
             num_variables=encoder.total_variable_count,
         )

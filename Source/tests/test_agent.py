@@ -1122,3 +1122,142 @@ def test_agent_run_aggregates_solver_metrics():
             for step in result.steps
         )
     )
+
+
+# Metrics section
+def test_first_agent_step_records_all_actual_sat_calls():
+    """
+    First deduction:
+
+        analyze A1:
+            2 SAT calls
+
+        GameEngine verification:
+            2 SAT calls
+
+    Total:
+        4 SAT calls.
+    """
+    _, _, agent = create_basic_game()
+
+    step = agent.step()
+
+    assert step is not None
+    assert step.character_id == "A1"
+
+    assert step.sat_calls == 4
+
+
+def test_step_sat_calls_use_counter_delta():
+    """
+    SAT calls made before step() must not be charged to that step.
+    """
+    _, _, agent = create_basic_game()
+
+    hint = agent.find_hint()
+
+    assert hint is not None
+
+    # find_hint() itself used two SAT calls.
+    assert (
+        agent.checker.sat_call_count
+        == 2
+    )
+
+    step = agent.step()
+
+    assert step is not None
+
+    # step() independently uses four more calls.
+    assert step.sat_calls == 4
+
+    assert (
+        agent.checker.sat_call_count
+        == 6
+    )
+
+
+def test_auto_solve_reports_actual_sat_calls():
+    _, _, agent = create_basic_game()
+
+    result = agent.auto_solve()
+
+    assert result.solved is True
+
+    assert result.sat_calls > 0
+
+    assert (
+        result.total_sat_calls
+        == result.sat_calls
+    )
+
+    # A solved run has no final unsuccessful scan, so every
+    # SAT call belongs to one successful deduction step.
+    assert result.sat_calls == sum(
+        step.sat_calls
+        for step in result.steps
+    )
+
+
+def test_no_provable_run_counts_unsuccessful_sat_queries():
+    """
+    With no initial information, all nine characters are UNKNOWN.
+
+    The agent analyzes every character:
+
+        9 * 2 = 18 SAT calls
+
+    but makes no successful deduction.
+    """
+    puzzle = load_puzzle(
+        puzzle_3x3_path()
+    )
+
+    puzzle = replace(
+        puzzle,
+        initial_revealed=(),
+    )
+
+    engine = GameEngine(
+        puzzle
+    )
+
+    agent = LogicAgent(
+        engine
+    )
+
+    result = agent.auto_solve()
+
+    assert result.solved is False
+
+    assert (
+        result.stop_reason
+        == AgentStopReason.NO_PROVABLE_MOVE
+    )
+
+    assert result.steps == ()
+
+    assert result.sat_calls == 18
+
+
+def test_previous_hint_calls_are_not_charged_to_auto_solve():
+    _, _, agent = create_basic_game()
+
+    hint = agent.find_hint()
+
+    assert hint is not None
+
+    assert (
+        agent.checker.sat_call_count
+        == 2
+    )
+
+    result = agent.auto_solve()
+
+    assert result.solved is True
+
+    # auto_solve reports only calls made during its own invocation.
+    assert result.sat_calls == sum(
+        step.sat_calls
+        for step in result.steps
+    )
