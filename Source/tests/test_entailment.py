@@ -875,3 +875,166 @@ def test_sat_call_counter_matches_recording_solver():
 
     assert checker.sat_call_count == 3
     assert len(solver.calls) == 3
+
+
+def test_metrics_snapshot_initially_zero():
+    checker = EntailmentChecker(
+        size=3
+    )
+
+    metrics = checker.metrics
+
+    assert metrics.sat_calls == 0
+    assert metrics.decisions == 0
+    assert metrics.propagations == 0
+    assert metrics.backtracks == 0
+    assert metrics.runtime == 0.0
+
+
+def test_analyze_character_aggregates_complete_solver_metrics():
+    puzzle, public_state = (
+        load_initial_public_state()
+    )
+
+    checker = EntailmentChecker(
+        size=puzzle.size
+    )
+
+    result = checker.analyze_character(
+        public_state,
+        "A1",
+    )
+
+    metrics = checker.metrics
+
+    assert metrics.sat_calls == 2
+
+    assert (
+        metrics.decisions
+        == result.total_decisions
+    )
+
+    assert (
+        metrics.propagations
+        == result.total_propagations
+    )
+
+    assert (
+        metrics.backtracks
+        == result.total_backtracks
+    )
+
+    assert metrics.runtime == pytest.approx(
+        result.total_runtime
+    )
+
+
+def test_analyze_all_metrics_equal_sum_of_all_analyses():
+    puzzle, public_state = (
+        load_initial_public_state()
+    )
+
+    checker = EntailmentChecker(
+        size=puzzle.size
+    )
+
+    results = checker.analyze_all(
+        public_state
+    )
+
+    metrics = checker.metrics
+
+    assert metrics.sat_calls == 16
+
+    assert metrics.decisions == sum(
+        result.total_decisions
+        for result in results.values()
+    )
+
+    assert metrics.propagations == sum(
+        result.total_propagations
+        for result in results.values()
+    )
+
+    assert metrics.backtracks == sum(
+        result.total_backtracks
+        for result in results.values()
+    )
+
+    assert metrics.runtime == pytest.approx(
+        sum(
+            result.total_runtime
+            for result in results.values()
+        )
+    )
+
+
+def test_metric_snapshot_delta():
+    puzzle, public_state = (
+        load_initial_public_state()
+    )
+
+    checker = EntailmentChecker(
+        size=puzzle.size
+    )
+
+    before = checker.metrics
+
+    result = checker.analyze_character(
+        public_state,
+        "A1",
+    )
+
+    after = checker.metrics
+
+    used = (
+        after - before
+    )
+
+    assert used.sat_calls == 2
+
+    assert (
+        used.decisions
+        == result.total_decisions
+    )
+
+    assert (
+        used.propagations
+        == result.total_propagations
+    )
+
+    assert (
+        used.backtracks
+        == result.total_backtracks
+    )
+
+    assert used.runtime == pytest.approx(
+        result.total_runtime
+    )
+
+
+def test_reset_metrics_resets_every_counter():
+    puzzle, public_state = (
+        load_initial_public_state()
+    )
+
+    checker = EntailmentChecker(
+        size=puzzle.size
+    )
+
+    checker.analyze_character(
+        public_state,
+        "A1",
+    )
+
+    assert checker.metrics.sat_calls == 2
+
+    checker.reset_metrics()
+
+    metrics = checker.metrics
+
+    assert metrics.sat_calls == 0
+    assert metrics.decisions == 0
+    assert metrics.propagations == 0
+    assert metrics.backtracks == 0
+    assert metrics.runtime == 0.0
