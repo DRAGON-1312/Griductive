@@ -112,6 +112,10 @@ class AgentStep:
     # Clues available in the public KB before this deduction.
     active_clue_ids: tuple[str, ...]
 
+    # Actual SAT calls performed while finding and verifying
+    # this successful deduction.
+    sat_calls: int
+
     character_id: str
     status: Status
     classification: Classification
@@ -165,6 +169,10 @@ class AgentRunResult:
 
     unresolved_character_ids: tuple[str, ...]
 
+    # Actual SAT solver calls performed during this auto_solve()
+    # invocation, including unsuccessful UNKNOWN scans.
+    sat_calls: int
+
     # --------------------------------------------------------
     # Convenience properties
     # --------------------------------------------------------
@@ -172,6 +180,14 @@ class AgentRunResult:
     @property
     def deduction_count(self) -> int:
         return len(self.steps)
+
+    @property
+    def total_sat_calls(self) -> int:
+        """
+        Total number of actual SAT solver calls performed during
+        this auto-solve run.
+        """
+        return self.sat_calls
 
     @property
     def total_decisions(self) -> int:
@@ -200,7 +216,7 @@ class AgentRunResult:
             step.runtime
             for step in self.steps
         )
-
+    
 
 # ============================================================
 # Logic Agent
@@ -551,12 +567,9 @@ class LogicAgent:
         ):
             return None
 
-        # ----------------------------------------------------
-        # Snapshot the clues that are active BEFORE reasoning.
-        #
-        # This exact set of clues forms the public clue portion
-        # of the KB used to justify this deduction.
-        # ----------------------------------------------------
+        sat_calls_before = (
+            self._checker.sat_call_count
+        )
 
         active_clue_ids = (
             self._get_active_clue_ids(
@@ -608,12 +621,25 @@ class LogicAgent:
                 f"{verdict_result.code.value}."
             )
 
+        # ----------------------------------------------------
+        # Count every SAT call performed while finding and
+        # verifying this successful deduction.
+        # ----------------------------------------------------
+
+        sat_calls_used = (
+            self._checker.sat_call_count
+            - sat_calls_before
+        )
+
         step_result = AgentStep(
             step_number=(
                 len(self._trace) + 1
             ),
             active_clue_ids=(
                 active_clue_ids
+            ),
+            sat_calls=(
+                sat_calls_used
             ),
             character_id=(
                 hint.character_id
@@ -696,6 +722,15 @@ class LogicAgent:
                     "max_steps must be non-negative."
                 )
 
+        # ----------------------------------------------------
+        # Snapshot the cumulative SAT-call counter so this run
+        # reports only calls made during this invocation.
+        # ----------------------------------------------------
+
+        sat_calls_before_run = (
+            self._checker.sat_call_count
+        )
+
         initial_public_state = (
             self._engine.get_public_state()
         )
@@ -710,6 +745,10 @@ class LogicAgent:
                 ),
                 steps=(),
                 unresolved_character_ids=(),
+                sat_calls=(
+                    self._checker.sat_call_count
+                    - sat_calls_before_run
+                ),
             )
 
         initial_unresolved = (
@@ -758,6 +797,10 @@ class LogicAgent:
                         run_steps
                     ),
                     unresolved_character_ids=(),
+                    sat_calls=(
+                        self._checker.sat_call_count
+                        - sat_calls_before_run
+                    ),
                 )
 
             step_result = self.step()
@@ -783,6 +826,10 @@ class LogicAgent:
                     ),
                     unresolved_character_ids=(
                         unresolved
+                    ),
+                    sat_calls=(
+                        self._checker.sat_call_count
+                        - sat_calls_before_run
                     ),
                 )
 
@@ -825,6 +872,10 @@ class LogicAgent:
             ),
             unresolved_character_ids=(
                 unresolved
+            ),
+            sat_calls=(
+                self._checker.sat_call_count
+                - sat_calls_before_run
             ),
         )
 
