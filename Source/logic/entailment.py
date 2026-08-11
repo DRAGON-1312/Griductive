@@ -33,6 +33,79 @@ class InvalidPublicStateError(EntailmentError):
 
 
 # ============================================================
+# SAT workload metrics
+# ============================================================
+
+@dataclass(frozen=True)
+class SATMetrics:
+    """
+    Aggregate workload of one or more SAT solver calls.
+
+    The metrics measure actual DPLL computation:
+
+        - sat_calls
+        - decisions
+        - propagations
+        - backtracks
+        - runtime
+
+    Instances are immutable so they can safely be used as
+    snapshots before and after a reasoning operation.
+    """
+
+    sat_calls: int = 0
+    decisions: int = 0
+    propagations: int = 0
+    backtracks: int = 0
+    runtime: float = 0.0
+
+    def __sub__(
+        self,
+        other: SATMetrics,
+    ) -> SATMetrics:
+        """
+        Return the workload performed between two cumulative
+        metric snapshots.
+
+        Typical use:
+
+            before = checker.metrics
+
+            ... perform reasoning ...
+
+            used = checker.metrics - before
+        """
+        if not isinstance(
+            other,
+            SATMetrics,
+        ):
+            return NotImplemented
+
+        return SATMetrics(
+            sat_calls=(
+                self.sat_calls
+                - other.sat_calls
+            ),
+            decisions=(
+                self.decisions
+                - other.decisions
+            ),
+            propagations=(
+                self.propagations
+                - other.propagations
+            ),
+            backtracks=(
+                self.backtracks
+                - other.backtracks
+            ),
+            runtime=(
+                self.runtime
+                - other.runtime
+            ),
+        )
+
+
+# ============================================================
 # Entailment result
 # ============================================================
 
@@ -246,13 +319,39 @@ class EntailmentChecker:
             else DPLLSolver()
         )
 
-        # Number of actual DPLL.solve() calls made through
-        # this EntailmentChecker instance.
+        # ----------------------------------------------------
+        # Cumulative SAT workload.
+        #
+        # Every DPLL solve performed through this checker is
+        # aggregated here.
+        # ----------------------------------------------------
+
         self._sat_call_count = 0
+        self._decision_count = 0
+        self._propagation_count = 0
+        self._backtrack_count = 0
+        self._solver_runtime = 0.0
 
     # ========================================================
-    # SAT-call metrics
+    # SAT workload metrics
     # ========================================================
+
+    @property
+    def metrics(self) -> SATMetrics:
+        """
+        Immutable snapshot of the cumulative SAT workload
+        performed by this checker.
+
+        The snapshot includes every DPLL.solve() call made through
+        the checker since construction or the latest reset_metrics().
+        """
+        return SATMetrics(
+            sat_calls=self._sat_call_count,
+            decisions=self._decision_count,
+            propagations=self._propagation_count,
+            backtracks=self._backtrack_count,
+            runtime=self._solver_runtime,
+        )
 
     @property
     def sat_call_count(self) -> int:
@@ -274,11 +373,32 @@ class EntailmentChecker:
 
     def reset_sat_call_count(self) -> None:
         """
-        Reset the cumulative SAT-call counter to zero.
+        Reset only the cumulative SAT-call counter to zero.
+
+        Other workload counters are intentionally preserved.
+        Use reset_metrics() when a fresh measurement window is
+        required for every metric.
 
         This does not modify the solver, puzzle state, or KB.
         """
         self._sat_call_count = 0
+
+    def reset_metrics(self) -> None:
+        """
+        Reset all cumulative SAT workload metrics.
+
+        This does not modify:
+
+            - the SAT solver,
+            - the public knowledge base,
+            - the puzzle,
+            - the game state.
+        """
+        self._sat_call_count = 0
+        self._decision_count = 0
+        self._propagation_count = 0
+        self._backtrack_count = 0
+        self._solver_runtime = 0.0
 
     def _solve(
         self,
@@ -288,18 +408,37 @@ class EntailmentChecker:
         assumptions: list[int] | None = None,
     ) -> SATResult:
         """
-        Execute exactly one SAT call and record it.
+        Execute exactly one SAT call and aggregate its workload.
 
         All EntailmentChecker SAT queries must pass through this
-        helper so sat_call_count remains accurate.
+        helper so every experiment metric uses the same
+        measurement scope.
         """
         self._sat_call_count += 1
 
-        return self._solver.solve(
+        result = self._solver.solve(
             clauses=clauses,
             num_variables=num_variables,
             assumptions=assumptions,
         )
+
+        self._decision_count += (
+            result.decisions
+        )
+
+        self._propagation_count += (
+            result.propagations
+        )
+
+        self._backtrack_count += (
+            result.backtracks
+        )
+
+        self._solver_runtime += (
+            result.runtime
+        )
+
+        return result
 
     # ========================================================
     # Main classifier API

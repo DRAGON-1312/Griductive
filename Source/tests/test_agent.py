@@ -1091,36 +1091,47 @@ def test_agent_step_exposes_non_negative_solver_metrics():
     assert step.runtime >= 0.0
 
 
-def test_agent_run_aggregates_solver_metrics():
+def test_agent_run_exposes_complete_solver_metrics():
     _, _, agent = create_basic_game()
+
+    before = agent.checker.metrics
 
     result = agent.auto_solve()
 
+    after = agent.checker.metrics
+
+    expected = (
+        after - before
+    )
+
+    assert result.total_sat_calls >= 0
     assert result.total_decisions >= 0
     assert result.total_propagations >= 0
     assert result.total_backtracks >= 0
     assert result.total_runtime >= 0.0
 
-    assert result.total_decisions == sum(
-        step.decisions
-        for step in result.steps
+    assert (
+        result.total_sat_calls
+        == expected.sat_calls
     )
 
-    assert result.total_propagations == sum(
-        step.propagations
-        for step in result.steps
+    assert (
+        result.total_decisions
+        == expected.decisions
     )
 
-    assert result.total_backtracks == sum(
-        step.backtracks
-        for step in result.steps
+    assert (
+        result.total_propagations
+        == expected.propagations
+    )
+
+    assert (
+        result.total_backtracks
+        == expected.backtracks
     )
 
     assert result.total_runtime == pytest.approx(
-        sum(
-            step.runtime
-            for step in result.steps
-        )
+        expected.runtime
     )
 
 
@@ -1261,3 +1272,134 @@ def test_previous_hint_calls_are_not_charged_to_auto_solve():
         step.sat_calls
         for step in result.steps
     )
+
+
+def test_first_step_metrics_match_checker_workload():
+    _, _, agent = create_basic_game()
+
+    before = agent.checker.metrics
+
+    step = agent.step()
+
+    after = agent.checker.metrics
+
+    assert step is not None
+
+    expected = (
+        after - before
+    )
+
+    assert step.metrics == expected
+
+    assert step.sat_calls == expected.sat_calls
+    assert step.decisions == expected.decisions
+    assert step.propagations == expected.propagations
+    assert step.backtracks == expected.backtracks
+
+    assert step.runtime == pytest.approx(
+        expected.runtime
+    )
+
+
+def test_step_metrics_exclude_previous_hint_computation():
+    _, _, agent = create_basic_game()
+
+    hint = agent.find_hint()
+
+    assert hint is not None
+
+    before_step = (
+        agent.checker.metrics
+    )
+
+    step = agent.step()
+
+    after_step = (
+        agent.checker.metrics
+    )
+
+    assert step is not None
+
+    assert (
+        step.metrics
+        == after_step - before_step
+    )
+
+
+def test_auto_solve_metrics_match_checker_delta():
+    _, _, agent = create_basic_game()
+
+    before = agent.checker.metrics
+
+    result = agent.auto_solve()
+
+    after = agent.checker.metrics
+
+    assert result.solved is True
+
+    expected = (
+        after - before
+    )
+
+    assert result.metrics == expected
+
+    assert (
+        result.total_sat_calls
+        == expected.sat_calls
+    )
+
+    assert (
+        result.total_decisions
+        == expected.decisions
+    )
+
+    assert (
+        result.total_propagations
+        == expected.propagations
+    )
+
+    assert (
+        result.total_backtracks
+        == expected.backtracks
+    )
+
+    assert result.total_runtime == pytest.approx(
+        expected.runtime
+    )
+
+
+def test_no_provable_run_preserves_full_solver_workload():
+    puzzle = load_puzzle(
+        puzzle_3x3_path()
+    )
+
+    puzzle = replace(
+        puzzle,
+        initial_revealed=(),
+    )
+
+    engine = GameEngine(
+        puzzle
+    )
+
+    agent = LogicAgent(
+        engine
+    )
+
+    result = agent.auto_solve()
+
+    assert result.steps == ()
+
+    # No deduction was produced, but the agent still performed
+    # nine entailment analyses.
+    assert result.sat_calls == 18
+
+    assert (
+        result.metrics
+        == agent.checker.metrics
+    )
+
+    assert result.total_decisions >= 0
+    assert result.total_propagations >= 0
+    assert result.total_backtracks >= 0
+    assert result.total_runtime >= 0.0

@@ -15,6 +15,7 @@ from core.models import (
 from logic.entailment import (
     EntailmentChecker,
     EntailmentResult,
+    SATMetrics,
 )
 
 
@@ -112,9 +113,9 @@ class AgentStep:
     # Clues available in the public KB before this deduction.
     active_clue_ids: tuple[str, ...]
 
-    # Actual SAT calls performed while finding and verifying
+    # Complete SAT workload used while finding and verifying
     # this successful deduction.
-    sat_calls: int
+    metrics: SATMetrics
 
     character_id: str
     status: Status
@@ -128,28 +129,32 @@ class AgentStep:
     analysis: EntailmentResult
 
     # --------------------------------------------------------
-    # Convenience metrics
+    # Convenience workload metrics
     # --------------------------------------------------------
 
     @property
+    def sat_calls(self) -> int:
+        """
+        Actual SAT calls used while finding and verifying this
+        successful deduction.
+        """
+        return self.metrics.sat_calls
+
+    @property
     def decisions(self) -> int:
-        """
-        Number of DPLL decisions used by the entailment analysis
-        that justified this deduction.
-        """
-        return self.analysis.total_decisions
+        return self.metrics.decisions
 
     @property
     def propagations(self) -> int:
-        return self.analysis.total_propagations
+        return self.metrics.propagations
 
     @property
     def backtracks(self) -> int:
-        return self.analysis.total_backtracks
+        return self.metrics.backtracks
 
     @property
     def runtime(self) -> float:
-        return self.analysis.total_runtime
+        return self.metrics.runtime
 
 
 # ============================================================
@@ -169,9 +174,9 @@ class AgentRunResult:
 
     unresolved_character_ids: tuple[str, ...]
 
-    # Actual SAT solver calls performed during this auto_solve()
+    # Complete SAT workload performed during this auto_solve()
     # invocation, including unsuccessful UNKNOWN scans.
-    sat_calls: int
+    metrics: SATMetrics
 
     # --------------------------------------------------------
     # Convenience properties
@@ -182,40 +187,28 @@ class AgentRunResult:
         return len(self.steps)
 
     @property
+    def sat_calls(self) -> int:
+        return self.metrics.sat_calls
+
+    @property
     def total_sat_calls(self) -> int:
-        """
-        Total number of actual SAT solver calls performed during
-        this auto-solve run.
-        """
-        return self.sat_calls
+        return self.metrics.sat_calls
 
     @property
     def total_decisions(self) -> int:
-        return sum(
-            step.decisions
-            for step in self.steps
-        )
+        return self.metrics.decisions
 
     @property
     def total_propagations(self) -> int:
-        return sum(
-            step.propagations
-            for step in self.steps
-        )
+        return self.metrics.propagations
 
     @property
     def total_backtracks(self) -> int:
-        return sum(
-            step.backtracks
-            for step in self.steps
-        )
+        return self.metrics.backtracks
 
     @property
     def total_runtime(self) -> float:
-        return sum(
-            step.runtime
-            for step in self.steps
-        )
+        return self.metrics.runtime
     
 
 # ============================================================
@@ -567,8 +560,8 @@ class LogicAgent:
         ):
             return None
 
-        sat_calls_before = (
-            self._checker.sat_call_count
+        metrics_before = (
+            self._checker.metrics
         )
 
         active_clue_ids = (
@@ -622,13 +615,13 @@ class LogicAgent:
             )
 
         # ----------------------------------------------------
-        # Count every SAT call performed while finding and
-        # verifying this successful deduction.
+        # Measure the complete SAT workload performed while
+        # finding and verifying this successful deduction.
         # ----------------------------------------------------
 
-        sat_calls_used = (
-            self._checker.sat_call_count
-            - sat_calls_before
+        metrics_used = (
+            self._checker.metrics
+            - metrics_before
         )
 
         step_result = AgentStep(
@@ -638,8 +631,8 @@ class LogicAgent:
             active_clue_ids=(
                 active_clue_ids
             ),
-            sat_calls=(
-                sat_calls_used
+            metrics=(
+                metrics_used
             ),
             character_id=(
                 hint.character_id
@@ -723,12 +716,13 @@ class LogicAgent:
                 )
 
         # ----------------------------------------------------
-        # Snapshot the cumulative SAT-call counter so this run
-        # reports only calls made during this invocation.
+        # Snapshot the cumulative SAT workload so this run
+        # reports only computation performed during this
+        # invocation.
         # ----------------------------------------------------
 
-        sat_calls_before_run = (
-            self._checker.sat_call_count
+        metrics_before_run = (
+            self._checker.metrics
         )
 
         initial_public_state = (
@@ -745,9 +739,9 @@ class LogicAgent:
                 ),
                 steps=(),
                 unresolved_character_ids=(),
-                sat_calls=(
-                    self._checker.sat_call_count
-                    - sat_calls_before_run
+                metrics=(
+                    self._checker.metrics
+                    - metrics_before_run
                 ),
             )
 
@@ -797,9 +791,9 @@ class LogicAgent:
                         run_steps
                     ),
                     unresolved_character_ids=(),
-                    sat_calls=(
-                        self._checker.sat_call_count
-                        - sat_calls_before_run
+                    metrics=(
+                        self._checker.metrics
+                        - metrics_before_run
                     ),
                 )
 
@@ -827,9 +821,9 @@ class LogicAgent:
                     unresolved_character_ids=(
                         unresolved
                     ),
-                    sat_calls=(
-                        self._checker.sat_call_count
-                        - sat_calls_before_run
+                    metrics=(
+                        self._checker.metrics
+                        - metrics_before_run
                     ),
                 )
 
@@ -873,9 +867,9 @@ class LogicAgent:
             unresolved_character_ids=(
                 unresolved
             ),
-            sat_calls=(
-                self._checker.sat_call_count
-                - sat_calls_before_run
+            metrics=(
+                self._checker.metrics
+                - metrics_before_run
             ),
         )
 
