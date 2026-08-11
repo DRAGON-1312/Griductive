@@ -887,6 +887,161 @@ def test_auto_solve_on_already_solved_game_returns_no_new_steps():
 # ============================================================
 # Deduction trace
 # ============================================================
+def test_first_step_records_initial_active_clues():
+    """
+    Before the first deduction, only the initially revealed
+    character B2 contributes a clue to the public KB.
+
+    AgentStep must snapshot exactly that clue.
+    """
+    _, engine, agent = create_basic_game()
+
+    before = engine.get_public_state()
+
+    expected_active_clue_ids = tuple(
+        clue.id
+        for clue in before.revealed_clues
+    )
+
+    step = agent.step()
+
+    assert step is not None
+
+    assert (
+        step.active_clue_ids
+        == expected_active_clue_ids
+    )
+
+    assert len(
+        step.active_clue_ids
+    ) == 1
+
+
+def test_newly_revealed_clue_is_not_active_in_same_step():
+    """
+    The clue revealed by an accepted verdict becomes active only
+    for future deductions.
+
+    It must not appear in the active-clue snapshot used to justify
+    the verdict that revealed it.
+    """
+    _, _, agent = create_basic_game()
+
+    step = agent.step()
+
+    assert step is not None
+    assert step.revealed_clue is not None
+
+    assert (
+        step.revealed_clue.id
+        not in step.active_clue_ids
+    )
+
+
+def test_newly_revealed_clue_becomes_active_on_next_step():
+    """
+    A clue revealed by step 1 must become part of the public KB
+    used by step 2.
+    """
+    _, engine, agent = create_basic_game()
+
+    first = agent.step()
+
+    assert first is not None
+    assert first.revealed_clue is not None
+
+    state_before_second = (
+        engine.get_public_state()
+    )
+
+    expected_active_clue_ids = tuple(
+        clue.id
+        for clue
+        in state_before_second.revealed_clues
+    )
+
+    second = agent.step()
+
+    assert second is not None
+
+    assert (
+        second.active_clue_ids
+        == expected_active_clue_ids
+    )
+
+    assert (
+        first.revealed_clue.id
+        in second.active_clue_ids
+    )
+
+
+def test_auto_solve_active_clue_snapshots_grow_by_one_per_step():
+    """
+    puzzle_3x3_01 starts with one revealed clue.
+
+    Every accepted deduction reveals exactly one additional clue.
+
+    Therefore, before deduction step k:
+
+        number of active clues = k
+
+    for steps 1..8.
+    """
+    _, _, agent = create_basic_game()
+
+    result = agent.auto_solve()
+
+    assert result.solved is True
+
+    assert len(
+        result.steps
+    ) == 8
+
+    for expected_count, step in enumerate(
+        result.steps,
+        start=1,
+    ):
+        assert len(
+            step.active_clue_ids
+        ) == expected_count
+
+
+def test_each_revealed_clue_appears_in_following_step_snapshot():
+    """
+    For every non-final deduction, the clue revealed by that
+    deduction must be active in the next deduction.
+    """
+    _, _, agent = create_basic_game()
+
+    result = agent.auto_solve()
+
+    for current, following in zip(
+        result.steps,
+        result.steps[1:],
+    ):
+        assert (
+            current.revealed_clue
+            is not None
+        )
+
+        assert (
+            current.revealed_clue.id
+            in following.active_clue_ids
+        )
+
+
+def test_active_clue_ids_are_stored_as_immutable_tuple():
+    _, _, agent = create_basic_game()
+
+    step = agent.step()
+
+    assert step is not None
+
+    assert isinstance(
+        step.active_clue_ids,
+        tuple,
+    )
+
 
 def test_clear_trace_removes_history_without_changing_game():
     _, engine, agent = create_basic_game()
