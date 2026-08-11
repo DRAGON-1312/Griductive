@@ -153,6 +153,19 @@ def evaluate_clue(
             size,
         )
 
+    if clue_type == ClueType.PARITY:
+        return evaluate_parity(
+            clue,
+            assignment,
+            size,
+        )
+
+    if clue_type == ClueType.IMPLIES:
+        return evaluate_implies(
+            clue,
+            assignment,
+        )
+
     raise UnsupportedClueTypeError(
         f"No semantic evaluator implemented for "
         f"clue type '{clue.type}'."
@@ -409,6 +422,141 @@ def evaluate_at_most(
     return criminal_count <= k
 
 
+def evaluate_parity(
+    clue: Clue,
+    assignment: Assignment,
+    size: int,
+) -> bool:
+    """
+    PARITY(parity, region)
+
+    EVEN:
+        number of criminals is even.
+
+    ODD:
+        number of criminals is odd.
+    """
+    parity = _get_required_param(
+        clue,
+        "parity",
+    )
+
+    region = _get_required_param(
+        clue,
+        "region",
+    )
+
+    if not isinstance(
+        parity,
+        str,
+    ):
+        raise SemanticEvaluationError(
+            f"Clue '{clue.id}': "
+            f"'parity' must be a string."
+        )
+
+    parity = (
+        parity
+        .strip()
+        .upper()
+    )
+
+    if parity not in {
+        "EVEN",
+        "ODD",
+    }:
+        raise SemanticEvaluationError(
+            f"Clue '{clue.id}': "
+            f"'parity' must be EVEN or ODD."
+        )
+
+    try:
+        cells = resolve_region_cells(
+            region,
+            size,
+        )
+
+    except Exception as exc:
+        raise SemanticEvaluationError(
+            f"Clue '{clue.id}' contains "
+            f"an invalid region."
+        ) from exc
+
+    criminal_count = _count_criminals(
+        cells,
+        assignment,
+    )
+
+    if parity == "EVEN":
+        return (
+            criminal_count % 2
+            == 0
+        )
+
+    return (
+        criminal_count % 2
+        == 1
+    )
+
+
+def evaluate_implies(
+    clue: Clue,
+    assignment: Assignment,
+) -> bool:
+    """
+    IMPLIES(A=status1, B=status2)
+
+    Logical meaning:
+
+        antecedent -> consequent
+    """
+    (
+        antecedent_person,
+        antecedent_status,
+    ) = _get_status_condition(
+        clue,
+        "antecedent",
+    )
+
+    (
+        consequent_person,
+        consequent_status,
+    ) = _get_status_condition(
+        clue,
+        "consequent",
+    )
+
+    if (
+        antecedent_person
+        == consequent_person
+    ):
+        raise SemanticEvaluationError(
+            f"Clue '{clue.id}': "
+            f"IMPLIES requires two distinct characters."
+        )
+
+    antecedent_holds = (
+        _get_assignment_status(
+            assignment,
+            antecedent_person,
+        )
+        == antecedent_status
+    )
+
+    consequent_holds = (
+        _get_assignment_status(
+            assignment,
+            consequent_person,
+        )
+        == consequent_status
+    )
+
+    return (
+        not antecedent_holds
+        or consequent_holds
+    )
+
+
 # ============================================================
 # Counting helpers
 # ============================================================
@@ -604,3 +752,61 @@ def _normalize_clue_type(
     raise SemanticEvaluationError(
         "Clue type must be a ClueType or string."
     )
+
+
+def _get_status_condition(
+    clue: Clue,
+    param_name: str,
+) -> tuple[str, Status]:
+
+    condition = _get_required_param(
+        clue,
+        param_name,
+    )
+
+    if not isinstance(
+        condition,
+        dict,
+    ):
+        raise SemanticEvaluationError(
+            f"Clue '{clue.id}': "
+            f"'{param_name}' must be an object."
+        )
+
+    if set(condition) != {
+        "person",
+        "status",
+    }:
+        raise SemanticEvaluationError(
+            f"Clue '{clue.id}': "
+            f"'{param_name}' must contain "
+            f"'person' and 'status'."
+        )
+
+    person = condition[
+        "person"
+    ]
+
+    status = condition[
+        "status"
+    ]
+
+    if not isinstance(
+        person,
+        str,
+    ):
+        raise SemanticEvaluationError(
+            f"Clue '{clue.id}': "
+            f"condition person must be a string."
+        )
+
+    if not isinstance(
+        status,
+        Status,
+    ):
+        raise SemanticEvaluationError(
+            f"Clue '{clue.id}': "
+            f"condition status must be a Status."
+        )
+
+    return person, status

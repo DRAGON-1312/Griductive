@@ -319,7 +319,7 @@ def _parse_clue(
     try:
         clue_type: ClueType | str = ClueType(raw_type)
     except ValueError:
-        # Future extension clue.
+        # Unknown future extension clue.
         clue_type = raw_type
 
     params = data.get("params")
@@ -355,6 +355,21 @@ def _parse_clue(
             params,
             context=f"{context}.params",
             size=size,
+            valid_cells=valid_cells,
+        )
+
+    elif clue_type == ClueType.PARITY:
+        parsed_params = _parse_parity_params(
+            params,
+            context=f"{context}.params",
+            size=size,
+            valid_cells=valid_cells,
+        )
+
+    elif clue_type == ClueType.IMPLIES:
+        parsed_params = _parse_implies_params(
+            params,
+            context=f"{context}.params",
             valid_cells=valid_cells,
         )
 
@@ -535,6 +550,152 @@ def _parse_counting_params(
         "region": region,
     }
 
+def _parse_parity_params(
+    params: dict[str, Any],
+    *,
+    context: str,
+    size: int,
+    valid_cells: set[str],
+) -> dict[str, Any]:
+    """
+    PARITY:
+        {
+            "parity": "EVEN" | "ODD",
+            "region": {...}
+        }
+    """
+    _require_exact_keys(
+        params,
+        required={"parity", "region"},
+        context=context,
+    )
+
+    parity = _read_non_empty_string(
+        params,
+        "parity",
+        context=context,
+    ).upper()
+
+    if parity not in {
+        "EVEN",
+        "ODD",
+    }:
+        raise PuzzleFormatError(
+            f"{context}.parity must be "
+            f"'EVEN' or 'ODD'."
+        )
+
+    region = _parse_region(
+        params["region"],
+        context=f"{context}.region",
+        size=size,
+        valid_cells=valid_cells,
+    )
+
+    return {
+        "parity": parity,
+        "region": region,
+    }
+
+# helper
+def _parse_status_condition(
+    data: Any,
+    *,
+    context: str,
+    valid_cells: set[str],
+) -> dict[str, Any]:
+    """
+    One status condition:
+
+        {
+            "person": "A1",
+            "status": "CRIMINAL"
+        }
+    """
+    if not isinstance(
+        data,
+        dict,
+    ):
+        raise PuzzleFormatError(
+            f"{context} must be an object."
+        )
+
+    _require_exact_keys(
+        data,
+        required={
+            "person",
+            "status",
+        },
+        context=context,
+    )
+
+    person = _read_non_empty_string(
+        data,
+        "person",
+        context=context,
+    ).upper()
+
+    _validate_cell_reference(
+        person,
+        valid_cells,
+        context=f"{context}.person",
+    )
+
+    status = _parse_status(
+        data["status"],
+        context=f"{context}.status",
+    )
+
+    return {
+        "person": person,
+        "status": status,
+    }
+
+def _parse_implies_params(
+    params: dict[str, Any],
+    *,
+    context: str,
+    valid_cells: set[str],
+) -> dict[str, Any]:
+    """
+    IMPLIES:
+
+        antecedent -> consequent
+    """
+    _require_exact_keys(
+        params,
+        required={
+            "antecedent",
+            "consequent",
+        },
+        context=context,
+    )
+
+    antecedent = _parse_status_condition(
+        params["antecedent"],
+        context=f"{context}.antecedent",
+        valid_cells=valid_cells,
+    )
+
+    consequent = _parse_status_condition(
+        params["consequent"],
+        context=f"{context}.consequent",
+        valid_cells=valid_cells,
+    )
+
+    if (
+        antecedent["person"]
+        == consequent["person"]
+    ):
+        raise PuzzleFormatError(
+            f"{context}: IMPLIES should reference "
+            f"two distinct characters."
+        )
+
+    return {
+        "antecedent": antecedent,
+        "consequent": consequent,
+    }
 
 # ============================================================
 # Region parsing

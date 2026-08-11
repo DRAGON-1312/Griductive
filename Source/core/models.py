@@ -33,14 +33,20 @@ class Classification(str, Enum):
 
 class ClueType(str, Enum):
     """
-    Six core clue templates required by the project.
+    Six core clue templates and two project extensions.
     """
+    
+    # Core clue types.
     FACT = "FACT"
     SAME = "SAME"
     DIFFERENT = "DIFFERENT"
     EXACTLY = "EXACTLY"
     AT_LEAST = "AT_LEAST"
     AT_MOST = "AT_MOST"
+
+    # Project extensions.
+    PARITY = "PARITY"
+    IMPLIES = "IMPLIES"
 
 
 class RegionType(str, Enum):

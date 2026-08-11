@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from itertools import combinations
+from itertools import (
+    combinations,
+    product,
+)
 
 from core.models import (
     Character,
@@ -329,6 +332,16 @@ class CNFEncoder:
 
         if clue_type == ClueType.AT_MOST:
             return self.encode_at_most(
+                clue
+            )
+
+        if clue_type == ClueType.PARITY:
+            return self.encode_parity(
+                clue
+            )
+
+        if clue_type == ClueType.IMPLIES:
+            return self.encode_implies(
                 clue
             )
 
@@ -748,6 +761,175 @@ class CNFEncoder:
 
         return clauses
 
+
+    def encode_implies(
+        self,
+        clue: Clue,
+    ) -> CNF:
+        """
+        IMPLIES:
+
+            antecedent -> consequent
+
+        Equivalent CNF:
+
+            NOT antecedent OR consequent
+        """
+        (
+            antecedent_person,
+            antecedent_status,
+        ) = self._get_status_condition(
+            clue,
+            "antecedent",
+        )
+
+        (
+            consequent_person,
+            consequent_status,
+        ) = self._get_status_condition(
+            clue,
+            "consequent",
+        )
+
+        if (
+            antecedent_person
+            == consequent_person
+        ):
+            raise CNFEncodingError(
+                f"Clue '{clue.id}': "
+                f"IMPLIES requires two distinct characters."
+            )
+
+        antecedent_literal = (
+            self.literal_for_status(
+                antecedent_person,
+                antecedent_status,
+            )
+        )
+
+        consequent_literal = (
+            self.literal_for_status(
+                consequent_person,
+                consequent_status,
+            )
+        )
+
+        return [
+            [
+                -antecedent_literal,
+                consequent_literal,
+            ]
+        ]
+
+
+    def encode_parity(
+        self,
+        clue: Clue,
+    ) -> CNF:
+        """
+        PARITY(parity, region)
+
+        Direct CNF encoding by blocking every assignment
+        whose Criminal count has the wrong parity.
+
+        No auxiliary variables are introduced.
+        """
+        parity = self._get_required_param(
+            clue,
+            "parity",
+        )
+
+        region = self._get_required_param(
+            clue,
+            "region",
+        )
+
+        if not isinstance(
+            parity,
+            str,
+        ):
+            raise CNFEncodingError(
+                f"Clue '{clue.id}': "
+                f"'parity' must be a string."
+            )
+
+        parity = (
+            parity
+            .strip()
+            .upper()
+        )
+
+        if parity not in {
+            "EVEN",
+            "ODD",
+        }:
+            raise CNFEncodingError(
+                f"Clue '{clue.id}': "
+                f"'parity' must be EVEN or ODD."
+            )
+
+        try:
+            cells = resolve_region_cells(
+                region,
+                self.size,
+            )
+
+        except Exception as exc:
+            raise CNFEncodingError(
+                f"Clue '{clue.id}' contains "
+                f"an invalid region."
+            ) from exc
+
+        variables = tuple(
+            self.variable_for(
+                cell
+            )
+            for cell in cells
+        )
+
+        wanted_parity = (
+            0
+            if parity == "EVEN"
+            else 1
+        )
+
+        cnf: CNF = []
+
+        for values in product(
+            (False, True),
+            repeat=len(variables),
+        ):
+            criminal_count = sum(
+                values
+            )
+
+            if (
+                criminal_count % 2
+                == wanted_parity
+            ):
+                continue
+
+            # Block exactly this invalid assignment.
+            clause = [
+                (
+                    -variable
+                    if value
+                    else variable
+                )
+                for variable, value
+                in zip(
+                    variables,
+                    values,
+                )
+            ]
+
+            cnf.append(
+                clause
+            )
+
+        return cnf
+
+
     # ========================================================
     # Counting clue helpers
     # ========================================================
@@ -933,3 +1115,66 @@ class CNFEncoder:
         raise CNFEncodingError(
             "Clue type must be a ClueType or string."
         )
+
+
+    def _get_status_condition(
+        self,
+        clue: Clue,
+        param_name: str,
+    ) -> tuple[str, Status]:
+
+        condition = self._get_required_param(
+            clue,
+            param_name,
+        )
+
+        if not isinstance(
+            condition,
+            dict,
+        ):
+            raise CNFEncodingError(
+                f"Clue '{clue.id}': "
+                f"'{param_name}' must be an object."
+            )
+
+        if set(condition) != {
+            "person",
+            "status",
+        }:
+            raise CNFEncodingError(
+                f"Clue '{clue.id}': "
+                f"'{param_name}' must contain "
+                f"'person' and 'status'."
+            )
+
+        person = condition[
+            "person"
+        ]
+
+        status = condition[
+            "status"
+        ]
+
+        if not isinstance(
+            person,
+            str,
+        ):
+            raise CNFEncodingError(
+                f"Clue '{clue.id}': "
+                f"condition person must be a string."
+            )
+
+        if not isinstance(
+            status,
+            Status,
+        ):
+            raise CNFEncodingError(
+                f"Clue '{clue.id}': "
+                f"condition status must be a Status."
+            )
+
+        self.variable_for(
+            person
+        )
+
+        return person, status
