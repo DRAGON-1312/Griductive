@@ -1,1 +1,5 @@
+# Visualization for experiment results
+matplotlib>=3.10
+
+# Automated testing
 pytest>=8.0
